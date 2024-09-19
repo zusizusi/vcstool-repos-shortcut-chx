@@ -1,5 +1,6 @@
 console.log("git extension test");
 
+// Convert SSH URL to HTTP URL
 function convertSshToHttp(sshUrl) {
   const sshPattern = /^git@([\w.-]+):([\w.-]+)\/([\w.-]+)\.git$/;
   const match = sshUrl.match(sshPattern);
@@ -9,108 +10,151 @@ function convertSshToHttp(sshUrl) {
     const repository = match[3];
     return `https://${domain}/${username}/${repository}.git`;
   } else {
-    console.log("Invalid SSH URL format");
-    return NaN;
+    console.error("Invalid SSH URL format");
+    return null;
   }
 }
 
-let reposFile = document.getElementsByClassName(
-  "Box-sc-g0xbh4-0 react-code-file-contents"
-)[0];
-let codeLinesElement = reposFile.getElementsByClassName("react-code-lines")[0];
-let codeLinesBlocks = codeLinesElement.getElementsByClassName(
-  "react-no-virtualization-wrapper"
-);
+// Extract individual lines from code line blocks on GitHub
+function getCodeLines(codeLinesBlocks) {
+  if (!codeLinesBlocks || codeLinesBlocks.length === 0) {
+    console.error("No code line blocks provided");
+    return null;
+  }
 
-let codeLines = [];
-if (codeLinesBlocks) {
-  for (var i = 0; i < codeLinesBlocks.length; i++) {
-    let codeBlock = codeLinesBlocks[i];
-    for (var j = 0; j < codeBlock.children.length; j++) {
-      let codeLine = codeBlock.children[j];
+  let codeLines = [];
+  for (const codeBlock of codeLinesBlocks) {
+    for (const codeLine of codeBlock.children) {
       codeLines.push(codeLine);
     }
   }
+
+  return codeLines.length > 0 ? codeLines : null;
 }
 
-let repos = {};
-let reposId = "";
+// Parse repository data from code lines and create an object
+function parseReposData(codeLines) {
+  if (!codeLines) {
+    console.error("No code lines found");
+    return null;
+  }
 
-// Assuming that type, url, and version are three consecutive lines
-for (var i = 0; i < codeLines.length; i++) {
-  let codeLine = codeLines[i];
-  let codeLineText = codeLine.innerText;
-  if (codeLineText.includes("type: ")) {
-    reposId = codeLine.id.trim(); // id is the id of type
-    let type = codeLineText.replace("type: ", "");
-    repos[reposId] = { type: type };
-  } else if (
-    codeLineText.includes("url: ") &&
-    codeLine.id === "LC" + (parseInt(reposId.slice(2)) + 1)
-  ) {
-    let url = codeLineText.replace("url: ", "").trim();
-    if (url.includes("https://") === false && url.includes("git@")) {
-      url = convertSshToHttp(url);
-      console.log(url);
+  let repos = {};
+  let reposId = "";
+
+  for (let i = 0; i < codeLines.length; i++) {
+    const codeLine = codeLines[i];
+    const codeLineText = codeLine.innerText.trim();
+
+    if (codeLineText.startsWith("type: ")) {
+      reposId = codeLine.id.trim();
+      const type = codeLineText.replace("type: ", "");
+      repos[reposId] = { type: type };
+    } else if (
+      codeLineText.startsWith("url: ") &&
+      codeLine.id === "LC" + (parseInt(reposId.slice(2)) + 1)
+    ) {
+      let url = codeLineText.replace("url: ", "").trim();
+      if (!url.startsWith("https://") && url.startsWith("git@")) {
+        url = convertSshToHttp(url);
+        if (!url) {
+          console.error("Failed to convert SSH URL to HTTP");
+          continue;
+        }
+      }
+      repos[reposId].url = url;
+    } else if (
+      codeLineText.startsWith("version: ") &&
+      codeLine.id === "LC" + (parseInt(reposId.slice(2)) + 2)
+    ) {
+      const version = codeLineText.replace("version: ", "").trim();
+      repos[reposId].version = version;
+      reposId = "";
+    } else {
+      reposId = "";
     }
-    repos[reposId].url = url;
-  } else if (
-    codeLineText.includes("version: ") &&
-    codeLine.id === "LC" + (parseInt(reposId.slice(2)) + 2)
-  ) {
-    let version = codeLineText.replace("version: ", "").trim();
-    repos[reposId].version = version;
-    reposId = "";
   }
+
+  return Object.keys(repos).length > 0 ? repos : null;
 }
 
-// let repos = {
-//     reposId: {
-//       type: "exampleType",
-//       url: "https://example.com",
-//       version: "1.0.0"
-//     }
-//   };
-
-// Get the position and size of the textarea
-let textarea = document.getElementById("read-only-cursor-text-area");
-let textareaRect = textarea.getBoundingClientRect();
-
-for (let key in repos) {
-  let repo = repos[key];
-  if (!repo.url || !repo.type || !repo.version) {
-    continue;
+// Function to get the position of the text area
+function getTextareaRect() {
+  const textarea = document.getElementById("read-only-cursor-text-area");
+  if (!textarea) {
+    console.error("Textarea not found");
+    return null;
   }
-  if (repo.type.includes("git") === false) {
-    console.log("type is not git");
-    continue;
+  return textarea.getBoundingClientRect();
+}
+
+function displayRepoButtons(repos, codeLinesElement) {
+  if (!repos) {
+    console.error("No repository data available");
+    return;
   }
 
-  if (repo.version) {
+  const textareaRect = getTextareaRect();
+  if (!textareaRect) {
+    console.error("Failed to get textarea rect");
+    return;
+  }
+
+  for (const key in repos) {
+    const repo = repos[key];
+    if (!repo.url || !repo.type) {
+      console.warn(`Incomplete repository data for key: ${key}`);
+      continue;
+    }
+
+    if (!repo.type.includes("git")) {
+      console.warn("Repository type is not git");
+      continue;
+    }
+
     const commitHashPattern = /^[0-9a-f]{40}$/;
-    if (repo.version.match(commitHashPattern)) {
-      repo.url = repo.url.replace(".git", "") + "/bolb/" + repo.version;
+    if (!repo.version) {
+      repo.url = repo.url.replace(".git", "");
+    } else if (commitHashPattern.test(repo.version)) {
+      repo.url = repo.url.replace(".git", "") + "/blob/" + repo.version;
     } else {
       repo.url = repo.url.replace(".git", "") + "/tree/" + repo.version;
     }
+
+    const codeLineElement = codeLinesElement.querySelector("#" + key);
+    if (!codeLineElement) {
+      console.error(`Code line element not found for key: ${key}`);
+      continue;
+    }
+
+    const rect = codeLineElement.getBoundingClientRect();
+    const top = rect.top + window.scrollY;
+    const left = textareaRect.left - 50;
+
+    const button = document.createElement("button");
+    button.style.position = "absolute";
+    button.style.zIndex = "999";
+    button.innerHTML = "Open";
+    button.onclick = () => window.open(repo.url);
+    button.style.top = `${top}px`;
+    button.style.left = `${left}px`;
+    document.body.appendChild(button);
   }
+}
 
-  // Get an element with a specific ID from codeLinesElement
-  let codeLineElement = codeLinesElement.querySelector("#" + key);
-  let rect = codeLineElement.getBoundingClientRect();
-  let top = rect.top + window.scrollY;
-  let left = textareaRect.left - 50;
+try {
+  const reposFile = document.getElementsByClassName(
+    "Box-sc-g0xbh4-0 react-code-file-contents"
+  )[0];
+  const codeLinesElement =
+    reposFile.getElementsByClassName("react-code-lines")[0];
+  const codeLinesBlocks = codeLinesElement.getElementsByClassName(
+    "react-no-virtualization-wrapper"
+  );
 
-  // Add a button to open the URL next to the text
-  let button = document.createElement("button");
-  button.style.position = "absolute";
-  button.style.zIndex = "999";
-  button.style.pointerEvents = "auto";
-  button.innerHTML = "open";
-  button.onclick = function () {
-    window.open(repo.url);
-  };
-  button.style.top = top + "px";
-  button.style.left = left + "px";
-  document.body.appendChild(button);
+  const codeLines = getCodeLines(codeLinesBlocks);
+  const repos = parseReposData(codeLines);
+  displayRepoButtons(repos, codeLinesElement);
+} catch (error) {
+  console.error("An error occurred:", error);
 }
