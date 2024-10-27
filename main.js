@@ -1,16 +1,21 @@
 console.log("Hello from vcstool repos shortcut extension");
 
+const SSH_PATTERN = /^git@([\w.-]+):([\w.-]+)\/([\w.-]+)\.git$/;
+const COMMIT_HASH_PATTERN = /^[0-9a-f]{40}$/;
+const CODE_FILE_CLASS = "Box-sc-g0xbh4-0 react-code-file-contents";
+const CODE_LINES_CLASS = "react-code-lines";
+const FILE_LINE_CLASS = "react-file-line";
+const TEXTAREA_ID = "read-only-cursor-text-area";
+const BUTTON_CLASS = "open-repo-button";
+
 // Convert SSH URL to HTTP URL
 function convertSshToHttp(sshUrl) {
-  const sshPattern = /^git@([\w.-]+):([\w.-]+)\/([\w.-]+)\.git$/;
-  const match = sshUrl.match(sshPattern);
+  const match = sshUrl.match(SSH_PATTERN);
   if (match) {
-    const domain = match[1];
-    const username = match[2];
-    const repository = match[3];
+    const [_, domain, username, repository] = match;
     return `https://${domain}/${username}/${repository}.git`;
   } else {
-    console.error("Invalid SSH URL format");
+    console.error("Invalid SSH URL format:", sshUrl);
     return null;
   }
 }
@@ -22,36 +27,30 @@ function parseReposData(codeLines) {
     return null;
   }
 
-  let repos = {};
+  const repos = {};
   let reposId = "";
 
-  for (let i = 0; i < codeLines.length; i++) {
-    const codeLine = codeLines[i];
+  for (const codeLine of codeLines) {
     const codeLineText = codeLine.innerText.trim();
 
     if (codeLineText.startsWith("type: ")) {
       reposId = codeLine.id.trim();
-      const type = codeLineText.replace("type: ", "");
-      repos[reposId] = { type: type };
+      repos[reposId] = { type: codeLineText.replace("type: ", "") };
     } else if (
       codeLineText.startsWith("url: ") &&
-      codeLine.id === "LC" + (parseInt(reposId.slice(2)) + 1)
+      codeLine.id === `LC${parseInt(reposId.slice(2)) + 1}`
     ) {
       let url = codeLineText.replace("url: ", "").trim();
       if (!url.startsWith("https://") && url.startsWith("git@")) {
         url = convertSshToHttp(url);
-        if (!url) {
-          console.error("Failed to convert SSH URL to HTTP");
-          continue;
-        }
+        if (!url) continue;
       }
       repos[reposId].url = url;
     } else if (
       codeLineText.startsWith("version: ") &&
-      codeLine.id === "LC" + (parseInt(reposId.slice(2)) + 2)
+      codeLine.id === `LC${parseInt(reposId.slice(2)) + 2}`
     ) {
-      const version = codeLineText.replace("version: ", "").trim();
-      repos[reposId].version = version;
+      repos[reposId].version = codeLineText.replace("version: ", "").trim();
       reposId = "";
     } else {
       reposId = "";
@@ -63,12 +62,28 @@ function parseReposData(codeLines) {
 
 // Function to get the position of the text area
 function getTextareaRect() {
-  const textarea = document.getElementById("read-only-cursor-text-area");
-  if (!textarea) {
+  const readOnlyTextArea = document.getElementById(TEXTAREA_ID);
+  if (!readOnlyTextArea) {
     console.error("Textarea not found");
     return null;
   }
-  return textarea.getBoundingClientRect();
+  return readOnlyTextArea.getBoundingClientRect();
+}
+
+function createRepoButton(repo, top, left) {
+  const link = document.createElement("a");
+  link.href = repo.url;
+  link.style.position = "absolute";
+  link.style.zIndex = "999";
+  link.style.top = `${top}px`;
+  link.style.left = `${left}px`;
+
+  const button = document.createElement("button");
+  button.className = BUTTON_CLASS;
+  button.innerHTML = "Open";
+  link.appendChild(button);
+
+  document.body.appendChild(link);
 }
 
 function displayRepoButtons(repos, codeLinesElement) {
@@ -95,56 +110,47 @@ function displayRepoButtons(repos, codeLinesElement) {
       continue;
     }
 
-    const commitHashPattern = /^[0-9a-f]{40}$/;
     if (!repo.version) {
       repo.url = repo.url.replace(".git", "");
-    } else if (commitHashPattern.test(repo.version)) {
+    } else if (COMMIT_HASH_PATTERN.test(repo.version)) {
       repo.url = repo.url.replace(".git", "") + "/blob/" + repo.version;
     } else {
       repo.url = repo.url.replace(".git", "") + "/tree/" + repo.version;
     }
 
-    const codeLineElement = codeLinesElement.querySelector("#" + key);
+    const codeLineElement = codeLinesElement.querySelector(`#${key}`);
     if (!codeLineElement) {
       console.error(`Code line element not found for key: ${key}`);
       continue;
     }
 
     const rect = codeLineElement.getBoundingClientRect();
-    const top = rect.top + window.scrollY;
-    const left = textareaRect.left - 50;
-
-    const link = document.createElement("a");
-    link.href = repo.url;
-    link.style.position = "absolute";
-    link.style.zIndex = "999";
-    link.style.top = `${top}px`;
-    link.style.left = `${left}px`;
-
-    const button = document.createElement("button");
-    button.className = "open-repo-button";
-    button.innerHTML = "Open";
-    link.appendChild(button);
-
-    document.body.appendChild(link);
+    createRepoButton(repo, rect.top + window.scrollY, textareaRect.left - 50);
   }
 }
 
 function removeRepoButtons() {
-  const buttons = document.querySelectorAll(".open-repo-button");
+  const buttons = document.querySelectorAll(`.${BUTTON_CLASS}`);
   buttons.forEach((button) => button.remove());
 }
 
 function init() {
   try {
-    const reposFile = document.getElementsByClassName(
-      "Box-sc-g0xbh4-0 react-code-file-contents"
-    )[0];
-    const codeLinesElement =
-      reposFile.getElementsByClassName("react-code-lines")[0];
-    const codeLines =
-      codeLinesElement.getElementsByClassName("react-file-line");
+    const codeFileContentsElements =
+      document.getElementsByClassName(CODE_FILE_CLASS)[0];
+    if (!codeFileContentsElements) {
+      console.error("Repos file element not found");
+      return;
+    }
 
+    const codeLinesElement =
+      codeFileContentsElements.getElementsByClassName(CODE_LINES_CLASS)[0];
+    if (!codeLinesElement) {
+      console.error("Code lines element not found");
+      return;
+    }
+
+    const codeLines = codeLinesElement.getElementsByClassName(FILE_LINE_CLASS);
     const repos = parseReposData(codeLines);
     displayRepoButtons(repos, codeLinesElement);
   } catch (error) {
@@ -154,12 +160,11 @@ function init() {
 
 function observeDOMChanges() {
   const observer = new MutationObserver(() => {
-    const reposFile = document.getElementsByClassName(
-      "Box-sc-g0xbh4-0 react-code-file-contents"
-    )[0];
-    const textarea = document.getElementById("read-only-cursor-text-area");
+    const codeFileContentsElements =
+      document.getElementsByClassName(CODE_FILE_CLASS)[0];
+    const readOnlyTextArea = document.getElementById(TEXTAREA_ID);
 
-    if (reposFile && textarea) {
+    if (codeFileContentsElements && readOnlyTextArea) {
       observer.disconnect();
       init();
     }
