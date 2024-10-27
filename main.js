@@ -122,6 +122,7 @@ function displayRepoButtons(repos, codeLinesElement) {
     link.style.left = `${left}px`;
 
     const button = document.createElement("button");
+    button.className = "open-repo-button";
     button.innerHTML = "Open";
     link.appendChild(button);
 
@@ -129,16 +130,61 @@ function displayRepoButtons(repos, codeLinesElement) {
   }
 }
 
-try {
-  const reposFile = document.getElementsByClassName(
-    "Box-sc-g0xbh4-0 react-code-file-contents"
-  )[0];
-  const codeLinesElement =
-    reposFile.getElementsByClassName("react-code-lines")[0];
-  const codeLines = codeLinesElement.getElementsByClassName("react-file-line");
+function removeRepoButtons() {
+  const buttons = document.querySelectorAll(".open-repo-button");
+  buttons.forEach((button) => button.remove());
+}
 
-  const repos = parseReposData(codeLines);
-  displayRepoButtons(repos, codeLinesElement);
-} catch (error) {
-  console.error("An error occurred:", error);
+function init() {
+  try {
+    const reposFile = document.getElementsByClassName(
+      "Box-sc-g0xbh4-0 react-code-file-contents"
+    )[0];
+    console.log(reposFile);
+    const codeLinesElement =
+      reposFile.getElementsByClassName("react-code-lines")[0];
+    const codeLines =
+      codeLinesElement.getElementsByClassName("react-file-line");
+
+    const repos = parseReposData(codeLines);
+    displayRepoButtons(repos, codeLinesElement);
+  } catch (error) {
+    console.error("An error occurred:", error);
+  }
+}
+
+function observeDOMChanges() {
+  const observer = new MutationObserver(() => {
+    const reposFile = document.getElementsByClassName(
+      "Box-sc-g0xbh4-0 react-code-file-contents"
+    )[0];
+    const textarea = document.getElementById("read-only-cursor-text-area");
+
+    if (reposFile && textarea) {
+      observer.disconnect();
+      init();
+    }
+  });
+
+  observer.observe(document, { subtree: true, childList: true });
+}
+
+// Monitor URL changes
+let lastUrl = location.href;
+new MutationObserver(() => {
+  const url = location.href;
+  if (url !== lastUrl) {
+    if (lastUrl.includes(".repos")) {
+      removeRepoButtons();
+    }
+    lastUrl = url;
+    if (url.includes(".repos")) {
+      observeDOMChanges();
+    }
+  }
+}).observe(document, { subtree: true, childList: true });
+
+// Initial check if the page is loaded directly with .repos file
+if (location.href.includes(".repos")) {
+  observeDOMChanges();
 }
