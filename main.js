@@ -15,23 +15,6 @@ function convertSshToHttp(sshUrl) {
   }
 }
 
-// Extract individual lines from code line blocks on GitHub
-function getCodeLines(codeLinesBlocks) {
-  if (!codeLinesBlocks || codeLinesBlocks.length === 0) {
-    console.error("No code line blocks provided");
-    return null;
-  }
-
-  let codeLines = [];
-  for (const codeBlock of codeLinesBlocks) {
-    for (const codeLine of codeBlock.children) {
-      codeLines.push(codeLine);
-    }
-  }
-
-  return codeLines.length > 0 ? codeLines : null;
-}
-
 // Parse repository data from code lines and create an object
 function parseReposData(codeLines) {
   if (!codeLines) {
@@ -131,14 +114,18 @@ function displayRepoButtons(repos, codeLinesElement) {
     const top = rect.top + window.scrollY;
     const left = textareaRect.left - 50;
 
+    const link = document.createElement("a");
+    link.href = repo.url;
+    link.style.position = "absolute";
+    link.style.zIndex = "999";
+    link.style.top = `${top}px`;
+    link.style.left = `${left}px`;
+
     const button = document.createElement("button");
-    button.style.position = "absolute";
-    button.style.zIndex = "999";
     button.innerHTML = "Open";
-    button.onclick = () => window.open(repo.url);
-    button.style.top = `${top}px`;
-    button.style.left = `${left}px`;
-    document.body.appendChild(button);
+    link.appendChild(button);
+
+    document.body.appendChild(link);
   }
 }
 
@@ -148,11 +135,8 @@ try {
   )[0];
   const codeLinesElement =
     reposFile.getElementsByClassName("react-code-lines")[0];
-  const codeLinesBlocks = codeLinesElement.getElementsByClassName(
-    "react-no-virtualization-wrapper"
-  );
+  const codeLines = codeLinesElement.getElementsByClassName("react-file-line");
 
-  const codeLines = getCodeLines(codeLinesBlocks);
   const repos = parseReposData(codeLines);
   displayRepoButtons(repos, codeLinesElement);
 } catch (error) {
