@@ -21,43 +21,47 @@ function convertSshToHttp(sshUrl) {
 }
 
 // Parse repository data from code lines and create an object
-function parseReposData(codeLines) {
+function parseRepositoryData(codeLines) {
   if (!codeLines) {
     console.error("No code lines found");
     return null;
   }
 
-  const repos = {};
-  let reposId = "";
+  const repositories = {};
+  let currentRepositoryId = "";
 
   for (const codeLine of codeLines) {
-    const codeLineText = codeLine.innerText.trim();
+    const lineText = codeLine.innerText.trim();
 
-    if (codeLineText.startsWith("type: ")) {
-      reposId = codeLine.id.trim();
-      repos[reposId] = { type: codeLineText.replace("type: ", "") };
+    if (lineText.startsWith("type: ")) {
+      currentRepositoryId = codeLine.id.trim();
+      repositories[currentRepositoryId] = {
+        type: lineText.replace("type: ", ""),
+      };
     } else if (
-      codeLineText.startsWith("url: ") &&
-      codeLine.id === `LC${parseInt(reposId.slice(2)) + 1}`
+      lineText.startsWith("url: ") &&
+      codeLine.id === `LC${parseInt(currentRepositoryId.slice(2)) + 1}`
     ) {
-      let url = codeLineText.replace("url: ", "").trim();
+      let url = lineText.replace("url: ", "").trim();
       if (!url.startsWith("https://") && url.startsWith("git@")) {
         url = convertSshToHttp(url);
         if (!url) continue;
       }
-      repos[reposId].url = url;
+      repositories[currentRepositoryId].url = url;
     } else if (
-      codeLineText.startsWith("version: ") &&
-      codeLine.id === `LC${parseInt(reposId.slice(2)) + 2}`
+      lineText.startsWith("version: ") &&
+      codeLine.id === `LC${parseInt(currentRepositoryId.slice(2)) + 2}`
     ) {
-      repos[reposId].version = codeLineText.replace("version: ", "").trim();
-      reposId = "";
+      repositories[currentRepositoryId].version = lineText
+        .replace("version: ", "")
+        .trim();
+      currentRepositoryId = "";
     } else {
-      reposId = "";
+      currentRepositoryId = "";
     }
   }
 
-  return Object.keys(repos).length > 0 ? repos : null;
+  return Object.keys(repositories).length > 0 ? repositories : null;
 }
 
 // Function to get the position of the text area
@@ -86,8 +90,8 @@ function createRepoButton(repo, top, left) {
   document.body.appendChild(link);
 }
 
-function displayRepoButtons(repos, codeLinesElement) {
-  if (!repos) {
+function displayRepoButtons(repositories, codeLinesElement) {
+  if (!repositories) {
     console.error("No repository data available");
     return;
   }
@@ -98,8 +102,8 @@ function displayRepoButtons(repos, codeLinesElement) {
     return;
   }
 
-  for (const key in repos) {
-    const repo = repos[key];
+  for (const key in repositories) {
+    const repo = repositories[key];
     if (!repo.url || !repo.type) {
       console.warn(`Incomplete repository data for key: ${key}`);
       continue;
@@ -136,23 +140,23 @@ function removeRepoButtons() {
 
 function init() {
   try {
-    const codeFileContentsElements =
+    const codeFileContentsElement =
       document.getElementsByClassName(CODE_FILE_CLASS)[0];
-    if (!codeFileContentsElements) {
+    if (!codeFileContentsElement) {
       console.error("Repos file element not found");
       return;
     }
 
     const codeLinesElement =
-      codeFileContentsElements.getElementsByClassName(CODE_LINES_CLASS)[0];
+      codeFileContentsElement.getElementsByClassName(CODE_LINES_CLASS)[0];
     if (!codeLinesElement) {
       console.error("Code lines element not found");
       return;
     }
 
     const codeLines = codeLinesElement.getElementsByClassName(FILE_LINE_CLASS);
-    const repos = parseReposData(codeLines);
-    displayRepoButtons(repos, codeLinesElement);
+    const repositories = parseRepositoryData(codeLines);
+    displayRepoButtons(repositories, codeLinesElement);
   } catch (error) {
     console.error("An error occurred:", error);
   }
@@ -160,11 +164,11 @@ function init() {
 
 function observeDOMChanges() {
   const observer = new MutationObserver(() => {
-    const codeFileContentsElements =
+    const codeFileContentsElement =
       document.getElementsByClassName(CODE_FILE_CLASS)[0];
     const readOnlyTextArea = document.getElementById(TEXTAREA_ID);
 
-    if (codeFileContentsElements && readOnlyTextArea) {
+    if (codeFileContentsElement && readOnlyTextArea) {
       observer.disconnect();
       init();
     }
