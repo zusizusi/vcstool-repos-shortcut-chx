@@ -1,4 +1,4 @@
-console.log("git extension test");
+console.log("Hello from vcstool repos shortcut extension");
 
 // Convert SSH URL to HTTP URL
 function convertSshToHttp(sshUrl) {
@@ -140,7 +140,6 @@ function init() {
     const reposFile = document.getElementsByClassName(
       "Box-sc-g0xbh4-0 react-code-file-contents"
     )[0];
-    console.log(reposFile);
     const codeLinesElement =
       reposFile.getElementsByClassName("react-code-lines")[0];
     const codeLines =
