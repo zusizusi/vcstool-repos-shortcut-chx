@@ -1,4 +1,4 @@
-# vcstool repos shortcut chrome extension
+# repos shortcut chrome extension for vcstools
 
 A Chrome extension that adds a shortcut button to open the URLs of repositories listed in the repos file.
 

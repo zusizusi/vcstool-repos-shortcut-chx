@@ -2,7 +2,7 @@
   "name": "vcstool repos shortcut extension",
   "version": "0.1.0",
   "manifest_version": 3,
-  "description": "Extension to add link buttons to each repository in repos file",
+  "description": "Extension that adds a shortcut button to open the URLs of repositories listed in the repos file.",
   "content_scripts": [
     {
       "matches": ["https://github.com/*"],
