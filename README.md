@@ -10,7 +10,7 @@ A Chrome extension that adds a shortcut button to open the URLs of repositories 
 
 ## From the Chrome Web Store
 
-Will be available soon
+[Chrome web store](https://chromewebstore.google.com/detail/vcstool-repos-shortcut-ex/pphgbpclcbjlfhbkkpenkcljjkdggmnp)
 
 ## From the source code
 
