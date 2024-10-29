@@ -74,13 +74,13 @@ function getTextareaRect() {
   return readOnlyTextArea.getBoundingClientRect();
 }
 
-function createRepoButton(repo, top, left) {
+function createRepoButton(repo, top) {
   const link = document.createElement("a");
   link.href = repo.url;
   link.style.position = "absolute";
   link.style.zIndex = "999";
   link.style.top = `${top}px`;
-  link.style.left = `${left}px`;
+  link.style.right = `10px`;
 
   const button = document.createElement("button");
   button.className = BUTTON_CLASS;
@@ -129,7 +129,7 @@ function displayRepoButtons(repositories, codeLinesElement) {
     }
 
     const rect = codeLineElement.getBoundingClientRect();
-    createRepoButton(repo, rect.top + window.scrollY, textareaRect.left - 50);
+    createRepoButton(repo, rect.top + window.scrollY);
   }
 }
 
