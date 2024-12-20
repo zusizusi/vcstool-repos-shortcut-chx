@@ -74,13 +74,13 @@ function getTextareaRect() {
   return readOnlyTextArea.getBoundingClientRect();
 }
 
-function createRepoButton(repo, top) {
+function createRepoButton(repo, top, left) {
   const link = document.createElement("a");
   link.href = repo.url;
   link.style.position = "absolute";
   link.style.zIndex = "999";
   link.style.top = `${top}px`;
-  link.style.right = `10px`;
+  link.style.left = `${left}px`;
 
   const button = document.createElement("button");
   button.className = BUTTON_CLASS;
@@ -129,7 +129,7 @@ function displayRepoButtons(repositories, codeLinesElement) {
     }
 
     const rect = codeLineElement.getBoundingClientRect();
-    createRepoButton(repo, rect.top + window.scrollY);
+    createRepoButton(repo, rect.top + window.scrollY, textareaRect.left - 50);
   }
 }
 
@@ -138,14 +138,19 @@ function removeRepoButtons() {
   buttons.forEach((button) => button.remove());
 }
 
+function getElementByClass(className) {
+  const element = document.getElementsByClassName(className)[0];
+  if (!element) {
+    console.error(`Element with class ${className} not found`);
+    return null;
+  }
+  return element;
+}
+
 function init() {
   try {
-    const codeFileContentsElement =
-      document.getElementsByClassName(CODE_FILE_CLASS)[0];
-    if (!codeFileContentsElement) {
-      console.error("Repos file element not found");
-      return;
-    }
+    const codeFileContentsElement = getElementByClass(CODE_FILE_CLASS);
+    if (!codeFileContentsElement) return;
 
     const codeLinesElement =
       codeFileContentsElement.getElementsByClassName(CODE_LINES_CLASS)[0];
@@ -157,6 +162,11 @@ function init() {
     const codeLines = codeLinesElement.getElementsByClassName(FILE_LINE_CLASS);
     const repositories = parseRepositoryData(codeLines);
     displayRepoButtons(repositories, codeLinesElement);
+
+    window.addEventListener("resize", () => {
+      removeRepoButtons();
+      displayRepoButtons(repositories, codeLinesElement);
+    });
   } catch (error) {
     console.error("An error occurred:", error);
   }
@@ -164,8 +174,7 @@ function init() {
 
 function observeDOMChanges() {
   const observer = new MutationObserver(() => {
-    const codeFileContentsElement =
-      document.getElementsByClassName(CODE_FILE_CLASS)[0];
+    const codeFileContentsElement = getElementByClass(CODE_FILE_CLASS);
     const readOnlyTextArea = document.getElementById(TEXTAREA_ID);
 
     if (codeFileContentsElement && readOnlyTextArea) {
