@@ -129,7 +129,31 @@ function displayRepoButtons(repositories, codeLinesElement) {
     }
 
     const rect = codeLineElement.getBoundingClientRect();
-    createRepoButton(repo, rect.top + window.scrollY, textareaRect.left - 50);
+    // createRepoButton(repo, rect.top + window.scrollY, textareaRect.left - 50);
+
+    const versionLineId = `LC${parseInt(key.slice(2)) + 2}`;
+    const versionLineElement = codeLinesElement.querySelector(
+      `#${versionLineId}`
+    );
+    if (versionLineElement && repo.version) {
+      // read-only 対応のため、実際のテキストはそのまま
+      // 代わりに絶対配置のリンク要素を重ねる
+      const rect = versionLineElement.getBoundingClientRect();
+      const link = document.createElement("a");
+      link.href = repo.url;
+      link.target = "_blank";
+      link.textContent = repo.version;
+      link.style.position = "absolute";
+      link.style.top = `${rect.top + window.scrollY}px`;
+      link.style.left = `${rect.left}px`;
+      link.style.width = `${rect.width}px`;
+      link.style.height = `${rect.height}px`;
+      link.style.lineHeight = `${rect.height}px`;
+      link.style.backgroundColor = "transparent";
+      link.style.pointerEvents = "auto";
+      link.style.zIndex = 999;
+      document.body.appendChild(link);
+    }
   }
 }
 
