@@ -35,14 +35,13 @@ function parseRepositoryData(codeLines) {
 
     if (lineText.startsWith("type: ")) {
       currentRepositoryId = codeLine.id.trim();
-      repositories[currentRepositoryId] = {
-        type: lineText.replace("type: ", ""),
-      };
+      const typeValue = lineText.replace("type: ", "").split("#")[0].trim();
+      repositories[currentRepositoryId] = { type: typeValue };
     } else if (
       lineText.startsWith("url: ") &&
       codeLine.id === `LC${parseInt(currentRepositoryId.slice(2)) + 1}`
     ) {
-      let url = lineText.replace("url: ", "").trim();
+      let url = lineText.replace("url: ", "").split("#")[0].trim();
       if (!url.startsWith("https://") && url.startsWith("git@")) {
         url = convertSshToHttp(url);
         if (!url) continue;
@@ -202,7 +201,7 @@ function findFilenameElement() {
   const fileNameElement = document.getElementById("file-name-id");
   const wideFileNameElement = document.getElementById("file-name-id-wide");
   if (!fileNameElement && !wideFileNameElement) {
-    console.log("file-name-id-wide not found");
+    // console.log("file-name-id-wide not found");
     return null;
   }
   return fileNameElement || wideFileNameElement;
@@ -237,9 +236,9 @@ function handleFilenameChange(newFilename) {
       init();
     }, 500);
 
-    console.log("Filename changed to include .repos");
+    // console.log("Filename changed to include .repos");
   } else if (previouslyRepos && !currentlyRepos) {
-    console.log("Filename changed to exclude .repos");
+    // console.log("Filename changed to exclude .repos");
     removeRepoButtons();
   }
   previousFilename = newFilename;
