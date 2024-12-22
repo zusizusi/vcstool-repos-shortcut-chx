@@ -173,35 +173,25 @@ function init() {
 }
 
 function observeDOMChanges() {
-  const observer = new MutationObserver(() => {
-    const codeFileContentsElement = getElementByClass(CODE_FILE_CLASS);
-    const readOnlyTextArea = document.getElementById(TEXTAREA_ID);
-
-    if (codeFileContentsElement && readOnlyTextArea) {
-      observer.disconnect();
-      init();
-    }
-  });
-
-  observer.observe(document, { subtree: true, childList: true });
+  removeRepoButtons();
+  init();
 }
 
 // Monitor URL changes
 let lastUrl = location.href;
+let lastFilename = "";
 new MutationObserver(() => {
   const url = location.href;
-  if (url !== lastUrl) {
-    if (lastUrl.includes(".repos")) {
-      removeRepoButtons();
-    }
-    lastUrl = url;
-    if (url.includes(".repos")) {
-      observeDOMChanges();
-    }
+  // id="file-name-id-wide"
+  if (!document.getElementById("file-name-id-wide")) return;
+  const filename = document.getElementById("file-name-id-wide").textContent;
+  if (filename.includes(".repos") && lastFilename !== filename) {
+    console.log("Filename includes .repos");
+    observeDOMChanges();
+  } else if (lastFilename.includes(".repos") && !filename.includes(".repos")) {
+    console.log("Filename does not include .repos");
+    removeRepoButtons();
   }
+  lastUrl = url;
+  lastFilename = filename;
 }).observe(document, { subtree: true, childList: true });
-
-// Initial check if the page is loaded directly with .repos file
-if (location.href.includes(".repos")) {
-  observeDOMChanges();
-}
