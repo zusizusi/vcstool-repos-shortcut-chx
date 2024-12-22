@@ -193,6 +193,8 @@ function isReposFilename(filename) {
 }
 
 // Centralized handling for filename logic
+let debounceTimeout;
+
 function handleFilenameChange(newFilename) {
   if (!newFilename) {
     removeRepoButtons();
@@ -208,13 +210,14 @@ function handleFilenameChange(newFilename) {
   ) {
     removeRepoButtons();
     // Wait for the file to load
-    setTimeout(() => {
+    clearTimeout(debounceTimeout);
+    debounceTimeout = setTimeout(() => {
       init();
     }, 500);
 
-    // console.log("Filename changed to include .repos");
+    console.log("Filename changed to include .repos");
   } else if (previouslyRepos && !currentlyRepos) {
-    // console.log("Filename changed to exclude .repos");
+    console.log("Filename changed to exclude .repos");
     removeRepoButtons();
   }
   previousFilename = newFilename;
