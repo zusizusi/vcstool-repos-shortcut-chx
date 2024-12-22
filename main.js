@@ -177,7 +177,7 @@ function findFilenameElement() {
   const fileNameElement = document.getElementById("file-name-id");
   const wideFileNameElement = document.getElementById("file-name-id-wide");
   if (!fileNameElement && !wideFileNameElement) {
-    console.log("file-name-id-wide not found");
+    // console.log("file-name-id-wide not found");
     return null;
   }
   return fileNameElement || wideFileNameElement;
@@ -212,9 +212,9 @@ function handleFilenameChange(newFilename) {
       init();
     }, 500);
 
-    console.log("Filename changed to include .repos");
+    // console.log("Filename changed to include .repos");
   } else if (previouslyRepos && !currentlyRepos) {
-    console.log("Filename changed to exclude .repos");
+    // console.log("Filename changed to exclude .repos");
     removeRepoButtons();
   }
   previousFilename = newFilename;
