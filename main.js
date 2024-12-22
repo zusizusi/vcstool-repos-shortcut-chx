@@ -35,14 +35,13 @@ function parseRepositoryData(codeLines) {
 
     if (lineText.startsWith("type: ")) {
       currentRepositoryId = codeLine.id.trim();
-      repositories[currentRepositoryId] = {
-        type: lineText.replace("type: ", ""),
-      };
+      const typeValue = lineText.replace("type: ", "").split("#")[0].trim();
+      repositories[currentRepositoryId] = { type: typeValue };
     } else if (
       lineText.startsWith("url: ") &&
       codeLine.id === `LC${parseInt(currentRepositoryId.slice(2)) + 1}`
     ) {
-      let url = lineText.replace("url: ", "").trim();
+      let url = lineText.replace("url: ", "").split("#")[0].trim();
       if (!url.startsWith("https://") && url.startsWith("git@")) {
         url = convertSshToHttp(url);
         if (!url) continue;
