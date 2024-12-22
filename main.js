@@ -35,14 +35,13 @@ function parseRepositoryData(codeLines) {
 
     if (lineText.startsWith("type: ")) {
       currentRepositoryId = codeLine.id.trim();
-      repositories[currentRepositoryId] = {
-        type: lineText.replace("type: ", ""),
-      };
+      const typeValue = lineText.replace("type: ", "").split("#")[0].trim();
+      repositories[currentRepositoryId] = { type: typeValue };
     } else if (
       lineText.startsWith("url: ") &&
       codeLine.id === `LC${parseInt(currentRepositoryId.slice(2)) + 1}`
     ) {
-      let url = lineText.replace("url: ", "").trim();
+      let url = lineText.replace("url: ", "").split("#")[0].trim();
       if (!url.startsWith("https://") && url.startsWith("git@")) {
         url = convertSshToHttp(url);
         if (!url) continue;
@@ -52,9 +51,11 @@ function parseRepositoryData(codeLines) {
       lineText.startsWith("version: ") &&
       codeLine.id === `LC${parseInt(currentRepositoryId.slice(2)) + 2}`
     ) {
-      repositories[currentRepositoryId].version = lineText
+      const versionValue = lineText
         .replace("version: ", "")
+        .split("#")[0]
         .trim();
+      repositories[currentRepositoryId].version = versionValue;
       currentRepositoryId = "";
     } else {
       currentRepositoryId = "";
@@ -74,13 +75,13 @@ function getTextareaRect() {
   return readOnlyTextArea.getBoundingClientRect();
 }
 
-function createRepoButton(repo, top) {
+function createRepoButton(repo, top, left) {
   const link = document.createElement("a");
   link.href = repo.url;
   link.style.position = "absolute";
   link.style.zIndex = "999";
   link.style.top = `${top}px`;
-  link.style.right = `10px`;
+  link.style.left = `${left}px`;
 
   const button = document.createElement("button");
   button.className = BUTTON_CLASS;
@@ -129,7 +130,7 @@ function displayRepoButtons(repositories, codeLinesElement) {
     }
 
     const rect = codeLineElement.getBoundingClientRect();
-    createRepoButton(repo, rect.top + window.scrollY);
+    createRepoButton(repo, rect.top + window.scrollY, textareaRect.left - 50);
   }
 }
 
@@ -138,14 +139,19 @@ function removeRepoButtons() {
   buttons.forEach((button) => button.remove());
 }
 
+function getElementByClass(className) {
+  const element = document.getElementsByClassName(className)[0];
+  if (!element) {
+    console.error(`Element with class ${className} not found`);
+    return null;
+  }
+  return element;
+}
+
 function init() {
   try {
-    const codeFileContentsElement =
-      document.getElementsByClassName(CODE_FILE_CLASS)[0];
-    if (!codeFileContentsElement) {
-      console.error("Repos file element not found");
-      return;
-    }
+    const codeFileContentsElement = getElementByClass(CODE_FILE_CLASS);
+    if (!codeFileContentsElement) return;
 
     const codeLinesElement =
       codeFileContentsElement.getElementsByClassName(CODE_LINES_CLASS)[0];
@@ -157,42 +163,82 @@ function init() {
     const codeLines = codeLinesElement.getElementsByClassName(FILE_LINE_CLASS);
     const repositories = parseRepositoryData(codeLines);
     displayRepoButtons(repositories, codeLinesElement);
+
+    window.addEventListener("resize", () => {
+      removeRepoButtons();
+      displayRepoButtons(repositories, codeLinesElement);
+    });
   } catch (error) {
     console.error("An error occurred:", error);
   }
 }
 
-function observeDOMChanges() {
-  const observer = new MutationObserver(() => {
-    const codeFileContentsElement =
-      document.getElementsByClassName(CODE_FILE_CLASS)[0];
-    const readOnlyTextArea = document.getElementById(TEXTAREA_ID);
+function findFilenameElement() {
+  const fileNameElement = document.getElementById("file-name-id");
+  const wideFileNameElement = document.getElementById("file-name-id-wide");
+  if (!fileNameElement && !wideFileNameElement) {
+    // console.log("file-name-id-wide not found");
+    return null;
+  }
+  return fileNameElement || wideFileNameElement;
+}
 
-    if (codeFileContentsElement && readOnlyTextArea) {
-      observer.disconnect();
+function getCurrentFilename() {
+  const element = findFilenameElement();
+  return element ? element.textContent || "" : "";
+}
+
+function isReposFilename(filename) {
+  return filename.includes(".repos");
+}
+
+// Centralized handling for filename logic
+function handleFilenameChange(newFilename) {
+  if (!newFilename) {
+    removeRepoButtons();
+    previousFilename = "";
+    return;
+  }
+  const previouslyRepos = isReposFilename(previousFilename);
+  const currentlyRepos = isReposFilename(newFilename);
+
+  if (
+    currentlyRepos &&
+    (!previousFilename || !previouslyRepos || previousFilename !== newFilename)
+  ) {
+    removeRepoButtons();
+    // Wait for the file to load
+    setTimeout(() => {
       init();
-    }
+    }, 500);
+
+    // console.log("Filename changed to include .repos");
+  } else if (previouslyRepos && !currentlyRepos) {
+    // console.log("Filename changed to exclude .repos");
+    removeRepoButtons();
+  }
+  previousFilename = newFilename;
+}
+
+let previousFilename = "";
+
+function observeFilenameChanges() {
+  const observer = new MutationObserver(() => {
+    const updatedFilename = getCurrentFilename();
+    handleFilenameChange(updatedFilename);
   });
 
-  observer.observe(document, { subtree: true, childList: true });
-}
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true,
+  });
 
-// Monitor URL changes
-let lastUrl = location.href;
-new MutationObserver(() => {
-  const url = location.href;
-  if (url !== lastUrl) {
-    if (lastUrl.includes(".repos")) {
-      removeRepoButtons();
-    }
-    lastUrl = url;
-    if (url.includes(".repos")) {
-      observeDOMChanges();
-    }
+  // Initial check
+  const initialFilename = getCurrentFilename();
+  if (isReposFilename(initialFilename)) {
+    removeRepoButtons();
+    init();
   }
-}).observe(document, { subtree: true, childList: true });
-
-// Initial check if the page is loaded directly with .repos file
-if (location.href.includes(".repos")) {
-  observeDOMChanges();
+  previousFilename = initialFilename;
 }
+observeFilenameChanges();
