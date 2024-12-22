@@ -52,9 +52,11 @@ function parseRepositoryData(codeLines) {
       lineText.startsWith("version: ") &&
       codeLine.id === `LC${parseInt(currentRepositoryId.slice(2)) + 2}`
     ) {
-      repositories[currentRepositoryId].version = lineText
+      const versionValue = lineText
         .replace("version: ", "")
+        .split("#")[0]
         .trim();
+      repositories[currentRepositoryId].version = versionValue;
       currentRepositoryId = "";
     } else {
       currentRepositoryId = "";
@@ -196,36 +198,72 @@ function init() {
   }
 }
 
-function observeDOMChanges() {
-  const observer = new MutationObserver(() => {
-    const codeFileContentsElement = getElementByClass(CODE_FILE_CLASS);
-    const readOnlyTextArea = document.getElementById(TEXTAREA_ID);
+function findFilenameElement() {
+  const fileNameElement = document.getElementById("file-name-id");
+  const wideFileNameElement = document.getElementById("file-name-id-wide");
+  if (!fileNameElement && !wideFileNameElement) {
+    console.log("file-name-id-wide not found");
+    return null;
+  }
+  return fileNameElement || wideFileNameElement;
+}
 
-    if (codeFileContentsElement && readOnlyTextArea) {
-      observer.disconnect();
+function getCurrentFilename() {
+  const element = findFilenameElement();
+  return element ? element.textContent || "" : "";
+}
+
+function isReposFilename(filename) {
+  return filename.includes(".repos");
+}
+
+// Centralized handling for filename logic
+function handleFilenameChange(newFilename) {
+  if (!newFilename) {
+    removeRepoButtons();
+    previousFilename = "";
+    return;
+  }
+  const previouslyRepos = isReposFilename(previousFilename);
+  const currentlyRepos = isReposFilename(newFilename);
+
+  if (
+    currentlyRepos &&
+    (!previousFilename || !previouslyRepos || previousFilename !== newFilename)
+  ) {
+    removeRepoButtons();
+    // Wait for the file to load
+    setTimeout(() => {
       init();
-    }
+    }, 500);
+
+    console.log("Filename changed to include .repos");
+  } else if (previouslyRepos && !currentlyRepos) {
+    console.log("Filename changed to exclude .repos");
+    removeRepoButtons();
+  }
+  previousFilename = newFilename;
+}
+
+let previousFilename = "";
+
+function observeFilenameChanges() {
+  const observer = new MutationObserver(() => {
+    const updatedFilename = getCurrentFilename();
+    handleFilenameChange(updatedFilename);
   });
 
-  observer.observe(document, { subtree: true, childList: true });
-}
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true,
+  });
 
-// Monitor URL changes
-let lastUrl = location.href;
-new MutationObserver(() => {
-  const url = location.href;
-  if (url !== lastUrl) {
-    if (lastUrl.includes(".repos")) {
-      removeRepoButtons();
-    }
-    lastUrl = url;
-    if (url.includes(".repos")) {
-      observeDOMChanges();
-    }
+  // Initial check
+  const initialFilename = getCurrentFilename();
+  if (isReposFilename(initialFilename)) {
+    removeRepoButtons();
+    init();
   }
-}).observe(document, { subtree: true, childList: true });
-
-// Initial check if the page is loaded directly with .repos file
-if (location.href.includes(".repos")) {
-  observeDOMChanges();
+  previousFilename = initialFilename;
 }
+observeFilenameChanges();
