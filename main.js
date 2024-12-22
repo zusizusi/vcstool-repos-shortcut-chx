@@ -208,7 +208,11 @@ function handleFilenameChange(newFilename) {
     (!previousFilename || !previouslyRepos || previousFilename !== newFilename)
   ) {
     removeRepoButtons();
-    init();
+    // Wait for the file to load
+    setTimeout(() => {
+      init();
+    }, 500);
+
     console.log("Filename changed to include .repos");
   } else if (previouslyRepos && !currentlyRepos) {
     console.log("Filename changed to exclude .repos");
