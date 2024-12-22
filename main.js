@@ -52,9 +52,11 @@ function parseRepositoryData(codeLines) {
       lineText.startsWith("version: ") &&
       codeLine.id === `LC${parseInt(currentRepositoryId.slice(2)) + 2}`
     ) {
-      repositories[currentRepositoryId].version = lineText
+      const versionValue = lineText
         .replace("version: ", "")
+        .split("#")[0]
         .trim();
+      repositories[currentRepositoryId].version = versionValue;
       currentRepositoryId = "";
     } else {
       currentRepositoryId = "";
