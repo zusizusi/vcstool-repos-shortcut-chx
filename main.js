@@ -56,6 +56,18 @@ function parseRepositoryData(codeLines) {
         .split("#")[0]
         .trim();
       repositories[currentRepositoryId].version = versionValue;
+      // Apply version logic once
+      if (repositories[currentRepositoryId].type.includes("git")) {
+        if (!versionValue) {
+          repositories[currentRepositoryId].url = repositories[currentRepositoryId].url.replace(".git", "");
+        } else if (COMMIT_HASH_PATTERN.test(versionValue)) {
+          repositories[currentRepositoryId].url =
+            repositories[currentRepositoryId].url.replace(".git", "") + "/blob/" + versionValue;
+        } else {
+          repositories[currentRepositoryId].url =
+            repositories[currentRepositoryId].url.replace(".git", "") + "/tree/" + versionValue;
+        }
+      }
       currentRepositoryId = "";
     } else {
       currentRepositoryId = "";
@@ -113,14 +125,6 @@ function displayRepoButtons(repositories, codeLinesElement) {
     if (!repo.type.includes("git")) {
       console.warn("Repository type is not git");
       continue;
-    }
-
-    if (!repo.version) {
-      repo.url = repo.url.replace(".git", "");
-    } else if (COMMIT_HASH_PATTERN.test(repo.version)) {
-      repo.url = repo.url.replace(".git", "") + "/blob/" + repo.version;
-    } else {
-      repo.url = repo.url.replace(".git", "") + "/tree/" + repo.version;
     }
 
     const codeLineElement = codeLinesElement.querySelector(`#${key}`);
