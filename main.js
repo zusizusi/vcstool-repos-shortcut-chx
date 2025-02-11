@@ -8,6 +8,8 @@ const FILE_LINE_CLASS = "react-file-line";
 const TEXTAREA_ID = "read-only-cursor-text-area";
 const BUTTON_CLASS = "open-repo-button";
 
+let storedRepositories = {};
+
 // Convert SSH URL to HTTP URL
 const convertSshToHttp = (sshUrl) => {
   const match = sshUrl.match(SSH_PATTERN);
@@ -20,7 +22,7 @@ const convertSshToHttp = (sshUrl) => {
   }
 };
 
-//function to extract field values from a line.
+// Function to get the value of a field in a line of text
 const getFieldValue = (text, prefix) => {
   if (text.startsWith(prefix)) {
     return text.slice(prefix.length).split("#")[0].trim();
@@ -28,7 +30,7 @@ const getFieldValue = (text, prefix) => {
   return null;
 };
 
-// function to apply version logic.
+// Function to apply version logic to repository object
 const applyVersionLogic = (repo) => {
   if (repo.type && repo.type.includes("git") && repo.url) {
     let baseUrl = repo.url;
@@ -46,9 +48,6 @@ const applyVersionLogic = (repo) => {
     }
   }
 };
-
-// Add a global repositories object to persist across invocations.
-let storedRepositories = {};
 
 const parseRepositoryData = (repositories, codeLines) => {
   if (!codeLines) {
@@ -82,7 +81,7 @@ const parseRepositoryData = (repositories, codeLines) => {
       }
     });
     applyVersionLogic(repo);
-    repo.key = blockLines[0].id || repoName;
+    repo.key = blockLines[0].id;
     if (repo.url && repo.type && repo.version && repo.key) {
       repositories[repoName] = repo;
     }
@@ -142,9 +141,11 @@ const displayRepoButtons = (repositories, codeLinesElement) => {
 
   Object.values(repositories).forEach((repo) => {
     const { name, key, url, type, version } = repo;
-    if (name === "repositories" && key === "LC1") return;
+    if (name === "repositories" && key === "LC1") return; // Skip the repositories: line
     if (!url || !type) {
-      console.warn(`Incomplete repository data for key: ${key}, name: ${name}, url: ${url}, type: ${type}, version: ${version}`);
+      console.warn(
+        `Incomplete repository data for key: ${key}, name: ${name}, url: ${url}, type: ${type}, version: ${version}`
+      );
       return;
     }
     if (!type.includes("git")) {
