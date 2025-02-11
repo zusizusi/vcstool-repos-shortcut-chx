@@ -20,6 +20,33 @@ function convertSshToHttp(sshUrl) {
   }
 }
 
+// New helper function to extract field values from a line.
+function getFieldValue(text, prefix) {
+  if (text.startsWith(prefix)) {
+    return text.slice(prefix.length).split("#")[0].trim();
+  }
+  return null;
+}
+
+// New helper function to apply version logic.
+function applyVersionLogic(repo) {
+  if (repo.type && repo.type.includes("git") && repo.url) {
+    let baseUrl = repo.url;
+    if (baseUrl.endsWith(".git")) {
+      baseUrl = baseUrl.slice(0, -4);
+    }
+    if (repo.version) {
+      if (COMMIT_HASH_PATTERN.test(repo.version)) {
+        repo.url = baseUrl + "/blob/" + repo.version;
+      } else {
+        repo.url = baseUrl + "/tree/" + repo.version;
+      }
+    } else {
+      repo.url = baseUrl;
+    }
+  }
+}
+
 // Parse repository data from code lines and create an object
 function parseRepositoryData(codeLines) {
   if (!codeLines) {
@@ -28,44 +55,56 @@ function parseRepositoryData(codeLines) {
   }
 
   const repositories = {};
-  let currentRepositoryId = "";
+  let currentBlock = [];
 
+  function processBlock(blockLines) {
+    if (blockLines.length === 0) return;
+    // First line: extract repository key before ":" to ignore trailing comments.
+    const repoKeyLine = blockLines[0].innerText.trim();
+    const repoName = repoKeyLine.split(":")[0].trim();
+    const repo = {};
+
+    for (let i = 1; i < blockLines.length; i++) {
+      const text = blockLines[i].innerText.trim();
+      // Skip comments and empty lines
+      if (!text || text.startsWith("#")) continue;
+      let value;
+      if ((value = getFieldValue(text, "type:"))) {
+        repo.type = value;
+      } else if ((value = getFieldValue(text, "url:"))) {
+        if (!value.startsWith("https://") && value.startsWith("git@")) {
+          value = convertSshToHttp(value);
+          if (!value) continue;
+        }
+        repo.url = value;
+      } else if ((value = getFieldValue(text, "version:"))) {
+        repo.version = value;
+      }
+    }
+    applyVersionLogic(repo);
+    // Use the id of the repository key line if available, otherwise repoName as key.
+    const key = blockLines[0].id || repoName;
+    repositories[key] = repo;
+  }
+
+  // Iterate over all code lines and split into blocks using repository key lines as delimiters.
   for (const codeLine of codeLines) {
     const lineText = codeLine.innerText.trim();
-
-    // Skip comments and repository key lines
-    if (lineText.startsWith("#") || /^[\w\.-]+:\s*$/.test(lineText)) {
-      continue;
-    }
-
-    if (lineText.startsWith("type: ")) {
-      currentRepositoryId = codeLine.id.trim();
-      const typeValue = lineText.replace("type: ", "").split("#")[0].trim();
-      repositories[currentRepositoryId] = { type: typeValue };
-    } else if (lineText.startsWith("url: ") && currentRepositoryId) {
-      let url = lineText.replace("url: ", "").split("#")[0].trim();
-      if (!url.startsWith("https://") && url.startsWith("git@")) {
-        url = convertSshToHttp(url);
-        if (!url) continue;
+    // Match repository key lines allowing optional comments after the colon.
+    if (/^[\w.\-\/_]+:\s*(#.*)?$/.test(lineText)) {
+      if (currentBlock.length > 0) {
+        processBlock(currentBlock);
       }
-      repositories[currentRepositoryId].url = url;
-    } else if (lineText.startsWith("version: ") && currentRepositoryId) {
-      const versionValue = lineText.replace("version: ", "").split("#")[0].trim();
-      repositories[currentRepositoryId].version = versionValue;
-      // Apply version logic once
-      if (repositories[currentRepositoryId].type.includes("git") && repositories[currentRepositoryId].url) {
-        if (!versionValue) {
-          repositories[currentRepositoryId].url = repositories[currentRepositoryId].url.replace(".git", "");
-        } else if (COMMIT_HASH_PATTERN.test(versionValue)) {
-          repositories[currentRepositoryId].url =
-            repositories[currentRepositoryId].url.replace(".git", "") + "/blob/" + versionValue;
-        } else {
-          repositories[currentRepositoryId].url =
-            repositories[currentRepositoryId].url.replace(".git", "") + "/tree/" + versionValue;
-        }
+      currentBlock = [codeLine];
+    } else {
+      if (currentBlock.length > 0) {
+        currentBlock.push(codeLine);
       }
-      currentRepositoryId = "";
     }
+  }
+  // Process the last block
+  if (currentBlock.length > 0) {
+    processBlock(currentBlock);
   }
 
   return Object.keys(repositories).length > 0 ? repositories : null;
