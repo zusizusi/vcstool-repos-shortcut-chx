@@ -15,12 +15,12 @@ function convertSshToHttp(sshUrl) {
     const [_, domain, username, repository] = match;
     return `https://${domain}/${username}/${repository}.git`;
   } else {
-    console.error("Invalid SSH URL format:", sshUrl);
+    console.log("Invalid SSH URL format:", sshUrl);
     return null;
   }
 }
 
-// New helper function to extract field values from a line.
+//function to extract field values from a line.
 function getFieldValue(text, prefix) {
   if (text.startsWith(prefix)) {
     return text.slice(prefix.length).split("#")[0].trim();
@@ -28,7 +28,7 @@ function getFieldValue(text, prefix) {
   return null;
 }
 
-// New helper function to apply version logic.
+// function to apply version logic.
 function applyVersionLogic(repo) {
   if (repo.type && repo.type.includes("git") && repo.url) {
     let baseUrl = repo.url;
@@ -50,7 +50,6 @@ function applyVersionLogic(repo) {
 // Add a global repositories object to persist across invocations.
 let storedRepositories = {};
 
-// Modify parseRepositoryData to accept repositories and codeLines as parameters.
 function parseRepositoryData(repositories, codeLines) {
   if (!codeLines) {
     console.error("No code lines found");
@@ -65,7 +64,7 @@ function parseRepositoryData(repositories, codeLines) {
     // Skip if already stored in storedRepositories.
     if (repositories[repoName]) return;
     const repo = { name: repoName };
-    console.log("Processing repository:", repoName);
+    console.debug("Processing repository:", repoName);
 
     for (let i = 1; i < blockLines.length; i++) {
       const text = blockLines[i].innerText.trim();
@@ -84,7 +83,6 @@ function parseRepositoryData(repositories, codeLines) {
       }
     }
     applyVersionLogic(repo);
-// Use the id of the repository key line if available, otherwise repoName as key.
     repo.key = blockLines[0].id || repoName;
     if (repo.url && repo.type && repo.version && repo.key) {
       repositories[repoName] = repo;
@@ -192,7 +190,7 @@ function getElementByClass(className) {
   return element;
 }
 
-// Update updateRepoButtons to pass storedRepositories to parseRepositoryData
+
 function updateRepoButtons(codeLinesElement) {
   const codeLines = codeLinesElement.getElementsByClassName(FILE_LINE_CLASS);
   parseRepositoryData(storedRepositories, codeLines);
@@ -205,10 +203,10 @@ function registerEventListeners(codeLinesElement) {
     updateRepoButtons(codeLinesElement);
   });
 
-  let debounceTimeout;
+  let scrollDebounce;
   window.addEventListener("scroll", () => {
-    clearTimeout(debounceTimeout);
-    debounceTimeout = setTimeout(() => {
+    clearTimeout(scrollDebounce);
+    scrollDebounce = setTimeout(() => {
       updateRepoButtons(codeLinesElement);
     }, 100);
   });
@@ -233,15 +231,15 @@ function init() {
   }
 }
 
-function findFilenameElement() {
+
+const findFilenameElement = () => {
   const fileNameElement = document.getElementById("file-name-id");
   const wideFileNameElement = document.getElementById("file-name-id-wide");
   if (!fileNameElement && !wideFileNameElement) {
-    // console.log("file-name-id-wide not found");
     return null;
   }
   return fileNameElement || wideFileNameElement;
-}
+};
 
 function getCurrentFilename() {
   const element = findFilenameElement();
@@ -253,7 +251,7 @@ function isReposFilename(filename) {
 }
 
 // Centralized handling for filename logic
-let debounceTimeout;
+let filenameDebounce;
 
 function handleFilenameChange(newFilename) {
   if (!newFilename) {
@@ -270,15 +268,14 @@ function handleFilenameChange(newFilename) {
   ) {
     storedRepositories = {};
     removeRepoButtons();
-    // Wait for the file to load
-    clearTimeout(debounceTimeout);
-    debounceTimeout = setTimeout(() => {
+    clearTimeout(filenameDebounce);
+    filenameDebounce = setTimeout(() => {
       init();
     }, 500);
 
-    console.log("Filename changed to include .repos");
+    console.debug("Filename changed to include .repos");
   } else if (previouslyRepos && !currentlyRepos) {
-    console.log("Filename changed to exclude .repos");
+    console.debug("Filename changed to exclude .repos");
     removeRepoButtons();
     storedRepositories = {};
   }
