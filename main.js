@@ -8,8 +8,10 @@ const FILE_LINE_CLASS = "react-file-line";
 const TEXTAREA_ID = "read-only-cursor-text-area";
 const BUTTON_CLASS = "open-repo-button";
 
+let storedRepositories = {};
+
 // Convert SSH URL to HTTP URL
-function convertSshToHttp(sshUrl) {
+const convertSshToHttp = (sshUrl) => {
   const match = sshUrl.match(SSH_PATTERN);
   if (match) {
     const [_, domain, username, repository] = match;
@@ -18,18 +20,18 @@ function convertSshToHttp(sshUrl) {
     console.log("Invalid SSH URL format:", sshUrl);
     return null;
   }
-}
+};
 
-//function to extract field values from a line.
-function getFieldValue(text, prefix) {
+// Function to get the value of a field in a line of text
+const getFieldValue = (text, prefix) => {
   if (text.startsWith(prefix)) {
     return text.slice(prefix.length).split("#")[0].trim();
   }
   return null;
-}
+};
 
-// function to apply version logic.
-function applyVersionLogic(repo) {
+// Function to apply version logic to repository object
+const applyVersionLogic = (repo) => {
   if (repo.type && repo.type.includes("git") && repo.url) {
     let baseUrl = repo.url;
     if (baseUrl.endsWith(".git")) {
@@ -45,84 +47,71 @@ function applyVersionLogic(repo) {
       repo.url = baseUrl;
     }
   }
-}
+};
 
-// Add a global repositories object to persist across invocations.
-let storedRepositories = {};
-
-function parseRepositoryData(repositories, codeLines) {
+const parseRepositoryData = (repositories, codeLines) => {
   if (!codeLines) {
     console.error("No code lines found");
     return null;
   }
   let currentBlock = [];
 
-  function processBlock(blockLines) {
+  const processBlock = (blockLines) => {
     if (blockLines.length === 0) return;
     const repoKeyLine = blockLines[0].innerText.trim();
     const repoName = repoKeyLine.split(":")[0].trim();
-    // Skip if already stored in storedRepositories.
     if (repositories[repoName]) return;
     const repo = { name: repoName };
     console.debug("Processing repository:", repoName);
 
-    for (let i = 1; i < blockLines.length; i++) {
-      const text = blockLines[i].innerText.trim();
-      if (!text || text.startsWith("#")) continue;
+    blockLines.slice(1).forEach((line) => {
+      const text = line.innerText.trim();
+      if (!text || text.startsWith("#")) return;
       let value;
       if ((value = getFieldValue(text, "type:"))) {
         repo.type = value;
       } else if ((value = getFieldValue(text, "url:"))) {
         if (!value.startsWith("https://") && value.startsWith("git@")) {
           value = convertSshToHttp(value);
-          if (!value) continue;
+          if (!value) return;
         }
         repo.url = value;
       } else if ((value = getFieldValue(text, "version:"))) {
         repo.version = value;
       }
-    }
+    });
     applyVersionLogic(repo);
-    repo.key = blockLines[0].id || repoName;
+    repo.key = blockLines[0].id;
     if (repo.url && repo.type && repo.version && repo.key) {
       repositories[repoName] = repo;
     }
-  }
+  };
 
-  // Iterate over all code lines and split into repository blocks.
-  for (const codeLine of codeLines) {
+  Array.from(codeLines).forEach((codeLine) => {
     const lineText = codeLine.innerText.trim();
     if (/^[\w.\-\/_]+:\s*(#.*)?$/.test(lineText)) {
-      if (codeLine.id === "LC1" && lineText === "repositories:") {
-        continue;
-      }
-      if (currentBlock.length > 0) {
-        processBlock(currentBlock);
-      }
+      if (codeLine.id === "LC1" && lineText === "repositories:") return;
+      if (currentBlock.length > 0) processBlock(currentBlock);
       currentBlock = [codeLine];
     } else {
-      if (currentBlock.length > 0) {
-        currentBlock.push(codeLine);
-      }
+      if (currentBlock.length > 0) currentBlock.push(codeLine);
     }
-  }
-  if (currentBlock.length > 0) {
-    processBlock(currentBlock);
-  }
+  });
+  if (currentBlock.length > 0) processBlock(currentBlock);
   return Object.keys(repositories).length > 0 ? repositories : null;
-}
+};
 
 // Function to get the position of the text area
-function getTextareaRect() {
+const getTextareaRect = () => {
   const readOnlyTextArea = document.getElementById(TEXTAREA_ID);
   if (!readOnlyTextArea) {
     console.error("Textarea not found");
     return null;
   }
   return readOnlyTextArea.getBoundingClientRect();
-}
+};
 
-function createRepoButton(repo, top, left) {
+const createRepoButton = (repo, top, left) => {
   const link = document.createElement("a");
   link.href = repo.url;
   link.style.position = "absolute";
@@ -136,9 +125,9 @@ function createRepoButton(repo, top, left) {
   link.appendChild(button);
 
   document.body.appendChild(link);
-}
+};
 
-function displayRepoButtons(repositories, codeLinesElement) {
+const displayRepoButtons = (repositories, codeLinesElement) => {
   if (!repositories) {
     console.error("No repository data available");
     return;
@@ -150,55 +139,51 @@ function displayRepoButtons(repositories, codeLinesElement) {
     return;
   }
 
-  for (const key_name in repositories) {
-    const repo = repositories[key_name];
-    if (repo.name == "repositories" && repo.key == "LC1") {
-      continue;
+  Object.values(repositories).forEach((repo) => {
+    const { name, key, url, type, version } = repo;
+    if (name === "repositories" && key === "LC1") return; // Skip the repositories: line
+    if (!url || !type) {
+      console.warn(
+        `Incomplete repository data for key: ${key}, name: ${name}, url: ${url}, type: ${type}, version: ${version}`
+      );
+      return;
     }
-    if (!repo.url || !repo.type) {
-      console.warn(`Incomplete repository data for key: ${repo.key}, name: ${repo.name}, url: ${repo.url}, type: ${repo.type}, version: ${repo.version}`);
-      continue;
-    }
-
-    if (!repo.type.includes("git")) {
+    if (!type.includes("git")) {
       console.warn("Repository type is not git");
-      continue;
+      return;
     }
-
-    const codeLineElement = codeLinesElement.querySelector(`#${repo.key}`);
+    const codeLineElement = codeLinesElement.querySelector(`#${key}`);
     if (!codeLineElement) {
-      console.error(`Code line element not found for key: ${repo.key}`);
-      continue;
+      console.error(`Code line element not found for key: ${key}`);
+      return;
     }
-
     const rect = codeLineElement.getBoundingClientRect();
     createRepoButton(repo, rect.top + window.scrollY, textareaRect.left - 50);
-  }
-}
+  });
+};
 
-function removeRepoButtons() {
+const removeRepoButtons = () => {
   const buttons = document.querySelectorAll(`.${BUTTON_CLASS}`);
   buttons.forEach((button) => button.remove());
-}
+};
 
-function getElementByClass(className) {
+const getElementByClass = (className) => {
   const element = document.getElementsByClassName(className)[0];
   if (!element) {
     console.error(`Element with class ${className} not found`);
     return null;
   }
   return element;
-}
+};
 
-
-function updateRepoButtons(codeLinesElement) {
+const updateRepoButtons = (codeLinesElement) => {
   const codeLines = codeLinesElement.getElementsByClassName(FILE_LINE_CLASS);
   parseRepositoryData(storedRepositories, codeLines);
   removeRepoButtons();
   displayRepoButtons(storedRepositories, codeLinesElement);
-}
+};
 
-function registerEventListeners(codeLinesElement) {
+const registerEventListeners = (codeLinesElement) => {
   window.addEventListener("resize", () => {
     updateRepoButtons(codeLinesElement);
   });
@@ -210,9 +195,9 @@ function registerEventListeners(codeLinesElement) {
       updateRepoButtons(codeLinesElement);
     }, 100);
   });
-}
+};
 
-function init() {
+const init = () => {
   try {
     const codeFileContentsElement = getElementByClass(CODE_FILE_CLASS);
     if (!codeFileContentsElement) return;
@@ -229,8 +214,7 @@ function init() {
   } catch (error) {
     console.error("An error occurred:", error);
   }
-}
-
+};
 
 const findFilenameElement = () => {
   const fileNameElement = document.getElementById("file-name-id");
@@ -241,19 +225,16 @@ const findFilenameElement = () => {
   return fileNameElement || wideFileNameElement;
 };
 
-function getCurrentFilename() {
+const getCurrentFilename = () => {
   const element = findFilenameElement();
   return element ? element.textContent || "" : "";
-}
+};
 
-function isReposFilename(filename) {
-  return filename.includes(".repos");
-}
+const isReposFilename = (filename) => filename.includes(".repos");
 
-// Centralized handling for filename logic
 let filenameDebounce;
 
-function handleFilenameChange(newFilename) {
+const handleFilenameChange = (newFilename) => {
   if (!newFilename) {
     removeRepoButtons();
     previousFilename = "";
@@ -280,11 +261,11 @@ function handleFilenameChange(newFilename) {
     storedRepositories = {};
   }
   previousFilename = newFilename;
-}
+};
 
 let previousFilename = "";
 
-function observeFilenameChanges() {
+const observeFilenameChanges = () => {
   const observer = new MutationObserver(() => {
     const updatedFilename = getCurrentFilename();
     handleFilenameChange(updatedFilename);
@@ -302,5 +283,5 @@ function observeFilenameChanges() {
     init();
   }
   previousFilename = initialFilename;
-}
+};
 observeFilenameChanges();
