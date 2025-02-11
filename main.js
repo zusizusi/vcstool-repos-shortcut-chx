@@ -9,7 +9,7 @@ const TEXTAREA_ID = "read-only-cursor-text-area";
 const BUTTON_CLASS = "open-repo-button";
 
 // Convert SSH URL to HTTP URL
-function convertSshToHttp(sshUrl) {
+const convertSshToHttp = (sshUrl) => {
   const match = sshUrl.match(SSH_PATTERN);
   if (match) {
     const [_, domain, username, repository] = match;
@@ -18,18 +18,18 @@ function convertSshToHttp(sshUrl) {
     console.log("Invalid SSH URL format:", sshUrl);
     return null;
   }
-}
+};
 
 //function to extract field values from a line.
-function getFieldValue(text, prefix) {
+const getFieldValue = (text, prefix) => {
   if (text.startsWith(prefix)) {
     return text.slice(prefix.length).split("#")[0].trim();
   }
   return null;
-}
+};
 
 // function to apply version logic.
-function applyVersionLogic(repo) {
+const applyVersionLogic = (repo) => {
   if (repo.type && repo.type.includes("git") && repo.url) {
     let baseUrl = repo.url;
     if (baseUrl.endsWith(".git")) {
@@ -45,19 +45,19 @@ function applyVersionLogic(repo) {
       repo.url = baseUrl;
     }
   }
-}
+};
 
 // Add a global repositories object to persist across invocations.
 let storedRepositories = {};
 
-function parseRepositoryData(repositories, codeLines) {
+const parseRepositoryData = (repositories, codeLines) => {
   if (!codeLines) {
     console.error("No code lines found");
     return null;
   }
   let currentBlock = [];
 
-  function processBlock(blockLines) {
+  const processBlock = (blockLines) => {
     if (blockLines.length === 0) return;
     const repoKeyLine = blockLines[0].innerText.trim();
     const repoName = repoKeyLine.split(":")[0].trim();
@@ -87,7 +87,7 @@ function parseRepositoryData(repositories, codeLines) {
     if (repo.url && repo.type && repo.version && repo.key) {
       repositories[repoName] = repo;
     }
-  }
+  };
 
   // Iterate over all code lines and split into repository blocks.
   for (const codeLine of codeLines) {
@@ -110,19 +110,19 @@ function parseRepositoryData(repositories, codeLines) {
     processBlock(currentBlock);
   }
   return Object.keys(repositories).length > 0 ? repositories : null;
-}
+};
 
 // Function to get the position of the text area
-function getTextareaRect() {
+const getTextareaRect = () => {
   const readOnlyTextArea = document.getElementById(TEXTAREA_ID);
   if (!readOnlyTextArea) {
     console.error("Textarea not found");
     return null;
   }
   return readOnlyTextArea.getBoundingClientRect();
-}
+};
 
-function createRepoButton(repo, top, left) {
+const createRepoButton = (repo, top, left) => {
   const link = document.createElement("a");
   link.href = repo.url;
   link.style.position = "absolute";
@@ -136,9 +136,9 @@ function createRepoButton(repo, top, left) {
   link.appendChild(button);
 
   document.body.appendChild(link);
-}
+};
 
-function displayRepoButtons(repositories, codeLinesElement) {
+const displayRepoButtons = (repositories, codeLinesElement) => {
   if (!repositories) {
     console.error("No repository data available");
     return;
@@ -174,31 +174,30 @@ function displayRepoButtons(repositories, codeLinesElement) {
     const rect = codeLineElement.getBoundingClientRect();
     createRepoButton(repo, rect.top + window.scrollY, textareaRect.left - 50);
   }
-}
+};
 
-function removeRepoButtons() {
+const removeRepoButtons = () => {
   const buttons = document.querySelectorAll(`.${BUTTON_CLASS}`);
   buttons.forEach((button) => button.remove());
-}
+};
 
-function getElementByClass(className) {
+const getElementByClass = (className) => {
   const element = document.getElementsByClassName(className)[0];
   if (!element) {
     console.error(`Element with class ${className} not found`);
     return null;
   }
   return element;
-}
+};
 
-
-function updateRepoButtons(codeLinesElement) {
+const updateRepoButtons = (codeLinesElement) => {
   const codeLines = codeLinesElement.getElementsByClassName(FILE_LINE_CLASS);
   parseRepositoryData(storedRepositories, codeLines);
   removeRepoButtons();
   displayRepoButtons(storedRepositories, codeLinesElement);
-}
+};
 
-function registerEventListeners(codeLinesElement) {
+const registerEventListeners = (codeLinesElement) => {
   window.addEventListener("resize", () => {
     updateRepoButtons(codeLinesElement);
   });
@@ -210,9 +209,9 @@ function registerEventListeners(codeLinesElement) {
       updateRepoButtons(codeLinesElement);
     }, 100);
   });
-}
+};
 
-function init() {
+const init = () => {
   try {
     const codeFileContentsElement = getElementByClass(CODE_FILE_CLASS);
     if (!codeFileContentsElement) return;
@@ -229,8 +228,7 @@ function init() {
   } catch (error) {
     console.error("An error occurred:", error);
   }
-}
-
+};
 
 const findFilenameElement = () => {
   const fileNameElement = document.getElementById("file-name-id");
@@ -241,19 +239,16 @@ const findFilenameElement = () => {
   return fileNameElement || wideFileNameElement;
 };
 
-function getCurrentFilename() {
+const getCurrentFilename = () => {
   const element = findFilenameElement();
   return element ? element.textContent || "" : "";
-}
+};
 
-function isReposFilename(filename) {
-  return filename.includes(".repos");
-}
+const isReposFilename = (filename) => filename.includes(".repos");
 
-// Centralized handling for filename logic
 let filenameDebounce;
 
-function handleFilenameChange(newFilename) {
+const handleFilenameChange = (newFilename) => {
   if (!newFilename) {
     removeRepoButtons();
     previousFilename = "";
@@ -280,11 +275,11 @@ function handleFilenameChange(newFilename) {
     storedRepositories = {};
   }
   previousFilename = newFilename;
-}
+};
 
 let previousFilename = "";
 
-function observeFilenameChanges() {
+const observeFilenameChanges = () => {
   const observer = new MutationObserver(() => {
     const updatedFilename = getCurrentFilename();
     handleFilenameChange(updatedFilename);
@@ -302,5 +297,5 @@ function observeFilenameChanges() {
     init();
   }
   previousFilename = initialFilename;
-}
+};
 observeFilenameChanges();
