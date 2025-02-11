@@ -33,31 +33,27 @@ function parseRepositoryData(codeLines) {
   for (const codeLine of codeLines) {
     const lineText = codeLine.innerText.trim();
 
+    // Skip comments and repository key lines
+    if (lineText.startsWith("#") || /^[\w\.-]+:\s*$/.test(lineText)) {
+      continue;
+    }
+
     if (lineText.startsWith("type: ")) {
       currentRepositoryId = codeLine.id.trim();
       const typeValue = lineText.replace("type: ", "").split("#")[0].trim();
       repositories[currentRepositoryId] = { type: typeValue };
-    } else if (
-      lineText.startsWith("url: ") &&
-      codeLine.id === `LC${parseInt(currentRepositoryId.slice(2)) + 1}`
-    ) {
+    } else if (lineText.startsWith("url: ") && currentRepositoryId) {
       let url = lineText.replace("url: ", "").split("#")[0].trim();
       if (!url.startsWith("https://") && url.startsWith("git@")) {
         url = convertSshToHttp(url);
         if (!url) continue;
       }
       repositories[currentRepositoryId].url = url;
-    } else if (
-      lineText.startsWith("version: ") &&
-      codeLine.id === `LC${parseInt(currentRepositoryId.slice(2)) + 2}`
-    ) {
-      const versionValue = lineText
-        .replace("version: ", "")
-        .split("#")[0]
-        .trim();
+    } else if (lineText.startsWith("version: ") && currentRepositoryId) {
+      const versionValue = lineText.replace("version: ", "").split("#")[0].trim();
       repositories[currentRepositoryId].version = versionValue;
       // Apply version logic once
-      if (repositories[currentRepositoryId].type.includes("git")) {
+      if (repositories[currentRepositoryId].type.includes("git") && repositories[currentRepositoryId].url) {
         if (!versionValue) {
           repositories[currentRepositoryId].url = repositories[currentRepositoryId].url.replace(".git", "");
         } else if (COMMIT_HASH_PATTERN.test(versionValue)) {
@@ -68,8 +64,6 @@ function parseRepositoryData(codeLines) {
             repositories[currentRepositoryId].url.replace(".git", "") + "/tree/" + versionValue;
         }
       }
-      currentRepositoryId = "";
-    } else {
       currentRepositoryId = "";
     }
   }
