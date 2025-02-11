@@ -47,26 +47,28 @@ function applyVersionLogic(repo) {
   }
 }
 
-// Parse repository data from code lines and create an object
-function parseRepositoryData(codeLines) {
+// Add a global repositories object to persist across invocations.
+let storedRepositories = {};
+
+// Modify parseRepositoryData to accept repositories and codeLines as parameters.
+function parseRepositoryData(repositories, codeLines) {
   if (!codeLines) {
     console.error("No code lines found");
     return null;
   }
-
-  const repositories = {};
   let currentBlock = [];
 
   function processBlock(blockLines) {
     if (blockLines.length === 0) return;
-    // First line: extract repository key before ":" to ignore trailing comments.
     const repoKeyLine = blockLines[0].innerText.trim();
     const repoName = repoKeyLine.split(":")[0].trim();
-    const repo = {};
+    // Skip if already stored in storedRepositories.
+    if (repositories[repoName]) return;
+    const repo = { name: repoName };
+    console.log("Processing repository:", repoName);
 
     for (let i = 1; i < blockLines.length; i++) {
       const text = blockLines[i].innerText.trim();
-      // Skip comments and empty lines
       if (!text || text.startsWith("#")) continue;
       let value;
       if ((value = getFieldValue(text, "type:"))) {
@@ -82,16 +84,20 @@ function parseRepositoryData(codeLines) {
       }
     }
     applyVersionLogic(repo);
-    // Use the id of the repository key line if available, otherwise repoName as key.
-    const key = blockLines[0].id || repoName;
-    repositories[key] = repo;
+// Use the id of the repository key line if available, otherwise repoName as key.
+    repo.key = blockLines[0].id || repoName;
+    if (repo.url && repo.type && repo.version && repo.key) {
+      repositories[repoName] = repo;
+    }
   }
 
-  // Iterate over all code lines and split into blocks using repository key lines as delimiters.
+  // Iterate over all code lines and split into repository blocks.
   for (const codeLine of codeLines) {
     const lineText = codeLine.innerText.trim();
-    // Match repository key lines allowing optional comments after the colon.
     if (/^[\w.\-\/_]+:\s*(#.*)?$/.test(lineText)) {
+      if (codeLine.id === "LC1" && lineText === "repositories:") {
+        continue;
+      }
       if (currentBlock.length > 0) {
         processBlock(currentBlock);
       }
@@ -102,11 +108,9 @@ function parseRepositoryData(codeLines) {
       }
     }
   }
-  // Process the last block
   if (currentBlock.length > 0) {
     processBlock(currentBlock);
   }
-
   return Object.keys(repositories).length > 0 ? repositories : null;
 }
 
@@ -148,10 +152,13 @@ function displayRepoButtons(repositories, codeLinesElement) {
     return;
   }
 
-  for (const key in repositories) {
-    const repo = repositories[key];
+  for (const key_name in repositories) {
+    const repo = repositories[key_name];
+    if (repo.name == "repositories" && repo.key == "LC1") {
+      continue;
+    }
     if (!repo.url || !repo.type) {
-      console.warn(`Incomplete repository data for key: ${key}`);
+      console.warn(`Incomplete repository data for key: ${repo.key}, name: ${repo.name}, url: ${repo.url}, type: ${repo.type}, version: ${repo.version}`);
       continue;
     }
 
@@ -160,9 +167,9 @@ function displayRepoButtons(repositories, codeLinesElement) {
       continue;
     }
 
-    const codeLineElement = codeLinesElement.querySelector(`#${key}`);
+    const codeLineElement = codeLinesElement.querySelector(`#${repo.key}`);
     if (!codeLineElement) {
-      console.error(`Code line element not found for key: ${key}`);
+      console.error(`Code line element not found for key: ${repo.key}`);
       continue;
     }
 
@@ -185,11 +192,12 @@ function getElementByClass(className) {
   return element;
 }
 
+// Update updateRepoButtons to pass storedRepositories to parseRepositoryData
 function updateRepoButtons(codeLinesElement) {
   const codeLines = codeLinesElement.getElementsByClassName(FILE_LINE_CLASS);
-  const repositories = parseRepositoryData(codeLines);
+  parseRepositoryData(storedRepositories, codeLines);
   removeRepoButtons();
-  displayRepoButtons(repositories, codeLinesElement);
+  displayRepoButtons(storedRepositories, codeLinesElement);
 }
 
 function registerEventListeners(codeLinesElement) {
@@ -260,6 +268,7 @@ function handleFilenameChange(newFilename) {
     currentlyRepos &&
     (!previousFilename || !previouslyRepos || previousFilename !== newFilename)
   ) {
+    storedRepositories = {};
     removeRepoButtons();
     // Wait for the file to load
     clearTimeout(debounceTimeout);
@@ -271,6 +280,7 @@ function handleFilenameChange(newFilename) {
   } else if (previouslyRepos && !currentlyRepos) {
     console.log("Filename changed to exclude .repos");
     removeRepoButtons();
+    storedRepositories = {};
   }
   previousFilename = newFilename;
 }
