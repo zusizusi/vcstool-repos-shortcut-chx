@@ -152,6 +152,27 @@ function getElementByClass(className) {
   return element;
 }
 
+function updateRepoButtons(codeLinesElement) {
+  const codeLines = codeLinesElement.getElementsByClassName(FILE_LINE_CLASS);
+  const repositories = parseRepositoryData(codeLines);
+  removeRepoButtons();
+  displayRepoButtons(repositories, codeLinesElement);
+}
+
+function registerEventListeners(codeLinesElement) {
+  window.addEventListener("resize", () => {
+    updateRepoButtons(codeLinesElement);
+  });
+
+  let debounceTimeout;
+  window.addEventListener("scroll", () => {
+    clearTimeout(debounceTimeout);
+    debounceTimeout = setTimeout(() => {
+      updateRepoButtons(codeLinesElement);
+    }, 100);
+  });
+}
+
 function init() {
   try {
     const codeFileContentsElement = getElementByClass(CODE_FILE_CLASS);
@@ -164,14 +185,8 @@ function init() {
       return;
     }
 
-    const codeLines = codeLinesElement.getElementsByClassName(FILE_LINE_CLASS);
-    const repositories = parseRepositoryData(codeLines);
-    displayRepoButtons(repositories, codeLinesElement);
-
-    window.addEventListener("resize", () => {
-      removeRepoButtons();
-      displayRepoButtons(repositories, codeLinesElement);
-    });
+    updateRepoButtons(codeLinesElement);
+    registerEventListeners(codeLinesElement);
   } catch (error) {
     console.error("An error occurred:", error);
   }
