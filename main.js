@@ -61,27 +61,26 @@ const parseRepositoryData = (repositories, codeLines) => {
     if (blockLines.length === 0) return;
     const repoKeyLine = blockLines[0].innerText.trim();
     const repoName = repoKeyLine.split(":")[0].trim();
-    // Skip if already stored in storedRepositories.
     if (repositories[repoName]) return;
     const repo = { name: repoName };
     console.debug("Processing repository:", repoName);
 
-    for (let i = 1; i < blockLines.length; i++) {
-      const text = blockLines[i].innerText.trim();
-      if (!text || text.startsWith("#")) continue;
+    blockLines.slice(1).forEach((line) => {
+      const text = line.innerText.trim();
+      if (!text || text.startsWith("#")) return;
       let value;
       if ((value = getFieldValue(text, "type:"))) {
         repo.type = value;
       } else if ((value = getFieldValue(text, "url:"))) {
         if (!value.startsWith("https://") && value.startsWith("git@")) {
           value = convertSshToHttp(value);
-          if (!value) continue;
+          if (!value) return;
         }
         repo.url = value;
       } else if ((value = getFieldValue(text, "version:"))) {
         repo.version = value;
       }
-    }
+    });
     applyVersionLogic(repo);
     repo.key = blockLines[0].id || repoName;
     if (repo.url && repo.type && repo.version && repo.key) {
@@ -89,26 +88,17 @@ const parseRepositoryData = (repositories, codeLines) => {
     }
   };
 
-  // Iterate over all code lines and split into repository blocks.
-  for (const codeLine of codeLines) {
+  Array.from(codeLines).forEach((codeLine) => {
     const lineText = codeLine.innerText.trim();
     if (/^[\w.\-\/_]+:\s*(#.*)?$/.test(lineText)) {
-      if (codeLine.id === "LC1" && lineText === "repositories:") {
-        continue;
-      }
-      if (currentBlock.length > 0) {
-        processBlock(currentBlock);
-      }
+      if (codeLine.id === "LC1" && lineText === "repositories:") return;
+      if (currentBlock.length > 0) processBlock(currentBlock);
       currentBlock = [codeLine];
     } else {
-      if (currentBlock.length > 0) {
-        currentBlock.push(codeLine);
-      }
+      if (currentBlock.length > 0) currentBlock.push(codeLine);
     }
-  }
-  if (currentBlock.length > 0) {
-    processBlock(currentBlock);
-  }
+  });
+  if (currentBlock.length > 0) processBlock(currentBlock);
   return Object.keys(repositories).length > 0 ? repositories : null;
 };
 
@@ -150,30 +140,25 @@ const displayRepoButtons = (repositories, codeLinesElement) => {
     return;
   }
 
-  for (const key_name in repositories) {
-    const repo = repositories[key_name];
-    if (repo.name == "repositories" && repo.key == "LC1") {
-      continue;
+  Object.values(repositories).forEach((repo) => {
+    const { name, key, url, type, version } = repo;
+    if (name === "repositories" && key === "LC1") return;
+    if (!url || !type) {
+      console.warn(`Incomplete repository data for key: ${key}, name: ${name}, url: ${url}, type: ${type}, version: ${version}`);
+      return;
     }
-    if (!repo.url || !repo.type) {
-      console.warn(`Incomplete repository data for key: ${repo.key}, name: ${repo.name}, url: ${repo.url}, type: ${repo.type}, version: ${repo.version}`);
-      continue;
-    }
-
-    if (!repo.type.includes("git")) {
+    if (!type.includes("git")) {
       console.warn("Repository type is not git");
-      continue;
+      return;
     }
-
-    const codeLineElement = codeLinesElement.querySelector(`#${repo.key}`);
+    const codeLineElement = codeLinesElement.querySelector(`#${key}`);
     if (!codeLineElement) {
-      console.error(`Code line element not found for key: ${repo.key}`);
-      continue;
+      console.error(`Code line element not found for key: ${key}`);
+      return;
     }
-
     const rect = codeLineElement.getBoundingClientRect();
     createRepoButton(repo, rect.top + window.scrollY, textareaRect.left - 50);
-  }
+  });
 };
 
 const removeRepoButtons = () => {
