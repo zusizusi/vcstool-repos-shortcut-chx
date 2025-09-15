@@ -1,7 +1,23 @@
 /**
  * Content script for vcstool repos shortcut extension
  * Adds shortcut buttons to open repository URLs from .repos files on GitHub
+ * Compatible with both Chrome and Firefox
  */
+
+/**
+ * Browser API compatibility layer
+ */
+const browserAPI = (() => {
+  // Check if we're in Firefox or Chrome
+  if (typeof browser !== 'undefined') {
+    // Firefox uses the browser global
+    return browser;
+  } else if (typeof chrome !== 'undefined') {
+    // Chrome uses the chrome global
+    return chrome;
+  }
+  return null; // No extension API available
+})();
 
 /**
  * Configuration constants
@@ -707,11 +723,11 @@ class VCSToolsExtension {
 
     // Listen for messages from background script
     if (
-      typeof chrome !== "undefined" &&
-      chrome.runtime &&
-      chrome.runtime.onMessage
+      browserAPI &&
+      browserAPI.runtime &&
+      browserAPI.runtime.onMessage
     ) {
-      chrome.runtime.onMessage.addListener((message) => {
+      browserAPI.runtime.onMessage.addListener((message) => {
         if (message && message.type === "VCSTOOL_REPOS_URL_CHANGE_DETECTED") {
           Logger.info("Received URL change message:", message.url);
           this.processUrl(message.url);

@@ -1,7 +1,23 @@
 /**
  * Background script for vcstool repos shortcut extension
  * Monitors GitHub URL changes and notifies content scripts
+ * Compatible with both Chrome and Firefox
  */
+
+/**
+ * Browser API compatibility layer
+ */
+const browserAPI = (() => {
+  // Check if we're in Firefox or Chrome
+  if (typeof browser !== 'undefined') {
+    // Firefox uses the browser global
+    return browser;
+  } else if (typeof chrome !== 'undefined') {
+    // Chrome uses the chrome global
+    return chrome;
+  }
+  throw new Error('Neither chrome nor browser API is available');
+})();
 
 /**
  * Configuration constants
@@ -43,7 +59,7 @@ class NavigationHandler {
    */
   static async notifyTab(tabId, url) {
     try {
-      await chrome.tabs.sendMessage(tabId, {
+      await browserAPI.tabs.sendMessage(tabId, {
         type: CONFIG.MESSAGE_TYPE,
         url,
       });
@@ -72,22 +88,22 @@ class NavigationHandler {
    */
   static init() {
     // SPA navigations (pushState/replaceState) on GitHub
-    chrome.webNavigation.onHistoryStateUpdated.addListener((details) => {
+    browserAPI.webNavigation.onHistoryStateUpdated.addListener((details) => {
       NavigationHandler.handleNavigation(details, "History state updated");
     });
 
     // Standard committed navigations (page loads, link clicks)
-    chrome.webNavigation.onCommitted.addListener((details) => {
+    browserAPI.webNavigation.onCommitted.addListener((details) => {
       NavigationHandler.handleNavigation(details, "Navigation committed");
     });
 
     // URL fragment (#hash) updates
-    chrome.webNavigation.onReferenceFragmentUpdated.addListener((details) => {
+    browserAPI.webNavigation.onReferenceFragmentUpdated.addListener((details) => {
       NavigationHandler.handleNavigation(details, "Reference fragment updated");
     });
 
     // Tab updates (reload or load completion)
-    chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    browserAPI.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
       if (
         changeInfo.status === "complete" &&
         NavigationHandler.isGitHubUrl(tab.url)
