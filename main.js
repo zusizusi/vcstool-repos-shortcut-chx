@@ -15,13 +15,14 @@ const CONFIG = {
     FILE_LINE_CLASS: "react-file-line",
     TEXTAREA_ID: "read-only-cursor-text-area",
     BUTTON_CLASS: "open-repo-button",
+    FILE_TREE_ID: "repos-file-tree",
   },
   RETRY: {
     MAX_ATTEMPTS: 8,
     INTERVAL: 300,
   },
   DEBOUNCE_DELAY: 100,
-  DEBUG: true,
+  DEBUG: false,
 };
 
 /**
@@ -172,8 +173,8 @@ class RepositoryParser {
     RepositoryParser.applyVersionLogic(repo);
     repo.key = blockLines[0].id;
 
-    // Validate repository data
-    if (repo.url && repo.type && repo.version && repo.key) {
+    // Validate repository data (repo.version can be empty)
+    if (repo.url && repo.type && repo.key) {
       repositories[repoName] = repo;
     }
   }
@@ -224,6 +225,39 @@ class RepositoryParser {
  * UI management class
  */
 class UIManager {
+  /**
+   * Validate that required elements exist in the DOM
+   * @returns {boolean} True if all required elements are found, false otherwise
+   */
+  static validateRequiredElements() {
+    const selectors = CONFIG.SELECTORS;
+    const checks = [
+      {
+        selector: selectors.CODE_FILE_CLASS,
+        type: "class",
+        name: "Code file contents",
+      },
+      { selector: selectors.TEXTAREA_ID, type: "id", name: "Text area" },
+    ];
+
+    for (const check of checks) {
+      let element;
+      if (check.type === "class") {
+        element = document.getElementsByClassName(check.selector)[0];
+      } else {
+        element = document.getElementById(check.selector);
+      }
+
+      if (!element) {
+        Logger.debug(`Validation failed: ${check.name} element not found.`);
+        return false;
+      }
+    }
+
+    Logger.debug("All required elements are present.");
+    return true;
+  }
+
   /**
    * Get element by class name with error handling
    * @param {string} className - Class name to search for
@@ -312,6 +346,14 @@ class UIManager {
     link.appendChild(button);
     document.body.appendChild(link);
 
+    // Center correction: Re-set left after obtaining button width
+    requestAnimationFrame(() => {
+      const w = button.offsetWidth || 26;
+      const h = button.offsetHeight || 26;
+      link.style.left = `${Math.max(0, left - w / 2)}px`;
+      link.style.top = `${top + h / 2}px`;
+    });
+
     return link;
   }
 
@@ -331,6 +373,13 @@ class UIManager {
       Logger.error("Failed to get textarea rect");
       return;
     }
+
+    const codeFileContainer = UIManager.getElementByClass(
+      CONFIG.SELECTORS.CODE_FILE_CLASS
+    );
+    if (!codeFileContainer) return;
+    const containerRect = codeFileContainer.getBoundingClientRect();
+    const containerLeft = containerRect.left + window.scrollX;
 
     let buttonCount = 0;
     Object.values(repositories).forEach((repo) => {
@@ -357,11 +406,12 @@ class UIManager {
         return;
       }
 
-      const rect = codeLineElement.getBoundingClientRect();
+      const lineRect = codeLineElement.getBoundingClientRect();
+      // Use line's Y coordinate and container's left edge as base for positioning (center-aligned horizontally)
       UIManager.createRepoButton(
         repo,
-        rect.top + window.scrollY,
-        textareaRect.left
+        lineRect.top + window.scrollY,
+        containerLeft
       );
       buttonCount++;
     });
@@ -396,6 +446,15 @@ class VCSToolsExtension {
     this.lastProcessedUrl = "";
     this.scrollDebounceTimer = null;
     this.isInitialized = false;
+    this.fileTreeObserver = null;
+    this.lastFileTreePresent = null;
+    // Flag indicating current page is a .repos file
+    this.currentPageIsReposFile = false;
+
+    // Event listener management
+    this.eventListenersRegistered = false;
+    this.boundResizeHandler = null;
+    this.boundScrollHandler = null;
   }
 
   /**
@@ -403,10 +462,12 @@ class VCSToolsExtension {
    * @param {Element} codeLinesElement - Code lines container
    */
   updateRepoButtons(codeLinesElement) {
+    if (!this.currentPageIsReposFile) return; // guard: only for repos files
     try {
       const codeLines = codeLinesElement.getElementsByClassName(
         CONFIG.SELECTORS.FILE_LINE_CLASS
       );
+      this.storedRepositories = {};
       RepositoryParser.parseRepositoryData(this.storedRepositories, codeLines);
       UIManager.removeRepoButtons();
       UIManager.displayRepoButtons(this.storedRepositories, codeLinesElement);
@@ -415,28 +476,118 @@ class VCSToolsExtension {
     }
   }
 
+  // Register observer for presence of file tree element
+  registerFileTreeObservers(codeLinesElement) {
+    if (this.fileTreeObserver) return; // Already registered
+    const FILE_TREE_ID = CONFIG.SELECTORS.FILE_TREE_ID;
+
+    const checkPresence = () => {
+      if (!this.currentPageIsReposFile) return; // Guard: only run on .repos file pages
+      const present = !!document.getElementById(FILE_TREE_ID);
+      if (present !== this.lastFileTreePresent) {
+        this.lastFileTreePresent = present;
+        Logger.debug(`File tree presence changed: ${present}`);
+        this.updateRepoButtons(codeLinesElement);
+      }
+    };
+
+    // Initial presence check
+    checkPresence();
+
+    this.fileTreeObserver = new MutationObserver(() => {
+      checkPresence();
+    });
+    this.fileTreeObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
+    Logger.debug("File tree simple observer registered");
+  }
+
+  // Disconnect observers (cleanup)
+  disconnectObservers() {
+    if (this.fileTreeObserver) {
+      try {
+        this.fileTreeObserver.disconnect();
+      } catch (_) {}
+      this.fileTreeObserver = null;
+    }
+    this.lastFileTreePresent = null;
+  }
+
   /**
-   * Register event listeners
+   * Complete cleanup of all resources
+   */
+  cleanup() {
+    this.disconnectObservers();
+    this.removeEventListeners();
+
+    if (this.scrollDebounceTimer) {
+      clearTimeout(this.scrollDebounceTimer);
+      this.scrollDebounceTimer = null;
+    }
+
+    Logger.debug("Complete cleanup performed");
+  }
+
+  /**
+   * Register event listeners with duplicate prevention
    * @param {Element} codeLinesElement - Code lines container
    */
   registerEventListeners(codeLinesElement) {
-    // Window resize listener
-    window.addEventListener("resize", () => {
-      this.updateRepoButtons(codeLinesElement);
-    });
+    // Prevent duplicate registration
+    if (this.eventListenersRegistered) {
+      Logger.debug("Event listeners already registered, skipping");
+      return;
+    }
 
-    // Scroll listener with debouncing
-    window.addEventListener("scroll", () => {
+    // Create bound methods to maintain 'this' context and enable cleanup
+    this.boundResizeHandler = () => {
+      if (!this.currentPageIsReposFile) return;
+      this.updateRepoButtons(codeLinesElement);
+    };
+
+    this.boundScrollHandler = () => {
+      if (!this.currentPageIsReposFile) return;
       if (this.scrollDebounceTimer) {
         clearTimeout(this.scrollDebounceTimer);
       }
-
       this.scrollDebounceTimer = setTimeout(() => {
         this.updateRepoButtons(codeLinesElement);
       }, CONFIG.DEBOUNCE_DELAY);
+    };
+
+    // Register event listeners
+    window.addEventListener("resize", this.boundResizeHandler);
+    window.addEventListener("scroll", this.boundScrollHandler, {
+      passive: true,
     });
 
-    Logger.debug("Event listeners registered");
+    this.eventListenersRegistered = true;
+    Logger.debug("Event listeners registered successfully");
+  }
+
+  /**
+   * Remove event listeners to prevent memory leaks
+   */
+  removeEventListeners() {
+    if (!this.eventListenersRegistered) {
+      return;
+    }
+
+    if (this.boundResizeHandler) {
+      window.removeEventListener("resize", this.boundResizeHandler);
+    }
+
+    if (this.boundScrollHandler) {
+      window.removeEventListener("scroll", this.boundScrollHandler);
+    }
+
+    this.eventListenersRegistered = false;
+    this.boundResizeHandler = null;
+    this.boundScrollHandler = null;
+
+    Logger.debug("Event listeners removed successfully");
   }
 
   /**
@@ -444,6 +595,14 @@ class VCSToolsExtension {
    */
   init() {
     try {
+      // First, validate that the required elements are on the page.
+      if (!UIManager.validateRequiredElements()) {
+        Logger.debug(
+          "Required elements not found, will not initialize extension."
+        );
+        return false;
+      }
+
       const codeFileContentsElement = UIManager.getElementByClass(
         CONFIG.SELECTORS.CODE_FILE_CLASS
       );
@@ -466,6 +625,7 @@ class VCSToolsExtension {
 
       if (!this.isInitialized) {
         this.registerEventListeners(codeLinesElement);
+        this.registerFileTreeObservers(codeLinesElement);
         this.isInitialized = true;
       }
 
@@ -518,13 +678,24 @@ class VCSToolsExtension {
     this.lastProcessedUrl = url;
     UIManager.removeRepoButtons();
     this.storedRepositories = {};
-    this.isInitialized = false;
+
+    // Complete cleanup before processing new URL
+    this.cleanup();
 
     const filename = UrlUtils.extractFilenameFromUrl(url);
-    if (filename && UrlUtils.isReposFilename(filename)) {
-      Logger.info(`Processing repos file: ${filename}`);
-      this.scheduleInitWithRetries();
+    this.currentPageIsReposFile = !!(
+      filename && UrlUtils.isReposFilename(filename)
+    );
+
+    if (!this.currentPageIsReposFile) {
+      Logger.debug("Not a .repos file page. Skipping initialization.");
+      return;
     }
+
+    Logger.info(`Processing repos file: ${filename}`);
+    // Reset initialization flag to allow re-initialization if needed
+    this.isInitialized = false;
+    this.scheduleInitWithRetries();
   }
 
   /**

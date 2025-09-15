@@ -7,9 +7,9 @@
  * Configuration constants
  */
 const CONFIG = {
-  GITHUB_MATCH: /https:\/\/github\.com\//,
-  MESSAGE_TYPE: "VCSTOOL_REPOS_URL_CHANGE_DETECTED",
-  DEBUG: true,
+  GITHUB_MATCH: /https:\/\/github\.com\//, // Regex to quickly verify we care about the navigated URL
+  MESSAGE_TYPE: "VCSTOOL_REPOS_URL_CHANGE_DETECTED", // Message type sent to content script
+  DEBUG: true, // Enable/disable verbose logging
 };
 
 /**
@@ -55,12 +55,12 @@ class NavigationHandler {
 
   /**
    * Handle navigation events
-   * @param {Object} details - Navigation details
+   * @param {Object} details - Navigation details from webNavigation API
    * @param {string} eventType - Type of navigation event
    */
   static handleNavigation(details, eventType) {
     if (!details.tabId || !NavigationHandler.isGitHubUrl(details.url)) {
-      return;
+      return; // Ignore non-GitHub navigations or missing tab info
     }
 
     Logger.info(`${eventType}:`, details.url);
@@ -71,22 +71,22 @@ class NavigationHandler {
    * Initialize navigation listeners
    */
   static init() {
-    // Handle history state updates (GitHub SPA navigation)
+    // SPA navigations (pushState/replaceState) on GitHub
     chrome.webNavigation.onHistoryStateUpdated.addListener((details) => {
       NavigationHandler.handleNavigation(details, "History state updated");
     });
 
-    // Handle committed navigation
+    // Standard committed navigations (page loads, link clicks)
     chrome.webNavigation.onCommitted.addListener((details) => {
       NavigationHandler.handleNavigation(details, "Navigation committed");
     });
 
-    // Handle fragment updates
+    // URL fragment (#hash) updates
     chrome.webNavigation.onReferenceFragmentUpdated.addListener((details) => {
       NavigationHandler.handleNavigation(details, "Reference fragment updated");
     });
 
-    // Handle tab updates (reload, initial load)
+    // Tab updates (reload or load completion)
     chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
       if (
         changeInfo.status === "complete" &&
@@ -101,5 +101,5 @@ class NavigationHandler {
   }
 }
 
-// Initialize the extension
+// Initialize the extension (entry point for background service worker)
 NavigationHandler.init();
