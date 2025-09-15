@@ -9,10 +9,10 @@
  */
 const browserAPI = (() => {
   // Check if we're in Firefox or Chrome
-  if (typeof browser !== 'undefined') {
+  if (typeof browser !== "undefined") {
     // Firefox uses the browser global
     return browser;
-  } else if (typeof chrome !== 'undefined') {
+  } else if (typeof chrome !== "undefined") {
     // Chrome uses the chrome global
     return chrome;
   }
@@ -722,11 +722,7 @@ class VCSToolsExtension {
     this.processUrl(window.location.href);
 
     // Listen for messages from background script
-    if (
-      browserAPI &&
-      browserAPI.runtime &&
-      browserAPI.runtime.onMessage
-    ) {
+    if (browserAPI && browserAPI.runtime && browserAPI.runtime.onMessage) {
       browserAPI.runtime.onMessage.addListener((message) => {
         if (message && message.type === "VCSTOOL_REPOS_URL_CHANGE_DETECTED") {
           Logger.info("Received URL change message:", message.url);

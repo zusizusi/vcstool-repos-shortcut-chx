@@ -9,14 +9,14 @@
  */
 const browserAPI = (() => {
   // Check if we're in Firefox or Chrome
-  if (typeof browser !== 'undefined') {
+  if (typeof browser !== "undefined") {
     // Firefox uses the browser global
     return browser;
-  } else if (typeof chrome !== 'undefined') {
+  } else if (typeof chrome !== "undefined") {
     // Chrome uses the chrome global
     return chrome;
   }
-  throw new Error('Neither chrome nor browser API is available');
+  throw new Error("Neither chrome nor browser API is available");
 })();
 
 /**
@@ -25,7 +25,7 @@ const browserAPI = (() => {
 const CONFIG = {
   GITHUB_MATCH: /https:\/\/github\.com\//, // Regex to quickly verify we care about the navigated URL
   MESSAGE_TYPE: "VCSTOOL_REPOS_URL_CHANGE_DETECTED", // Message type sent to content script
-  DEBUG: true, // Enable/disable verbose logging
+  DEBUG: false, // Enable/disable verbose logging
 };
 
 /**
@@ -98,9 +98,14 @@ class NavigationHandler {
     });
 
     // URL fragment (#hash) updates
-    browserAPI.webNavigation.onReferenceFragmentUpdated.addListener((details) => {
-      NavigationHandler.handleNavigation(details, "Reference fragment updated");
-    });
+    browserAPI.webNavigation.onReferenceFragmentUpdated.addListener(
+      (details) => {
+        NavigationHandler.handleNavigation(
+          details,
+          "Reference fragment updated"
+        );
+      }
+    );
 
     // Tab updates (reload or load completion)
     browserAPI.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
