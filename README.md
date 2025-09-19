@@ -1,21 +1,26 @@
-# repos shortcut chrome extension for vcstools
+# vcstool repos shortcut chrome extension
 
 A Chrome extension that adds a shortcut button to open the URLs of repositories listed in the repos file.
 
-# DEMO
+## Demo
 
-<img src="images/demo.gif" width="400">
+![Demo](images/demo.gif)
 
-# Installation
+## Features
 
-## From the Chrome Web Store
+- 🚀 Automatically detects `.repos` files on GitHub
+- 🎯 Adds convenient "Open" buttons next to each repository entry
+- 🔗 Supports both SSH and HTTPS repository URLs
+- 📦 Handles version/branch/commit navigation
+- ⚡ Real-time URL monitoring with GitHub SPA navigation
 
-[Chrome web store](https://chromewebstore.google.com/detail/vcstool-repos-shortcut-ex/pphgbpclcbjlfhbkkpenkcljjkdggmnp)
+## Installation
 
-## From the source code
+Install from [Chrome Web Store](https://chromewebstore.google.com/detail/vcstool-repos-shortcut-ex/pphgbpclcbjlfhbkkpenkcljjkdggmnp)
 
-1. Download the extension from the [releases page]
-2. Unzip the downloaded file
-3. Open Chrome and go to `chrome://extensions/`
-4. Enable Developer mode
-5. Click on `Load unpacked` and select the unzipped folder
+
+## For developers
+1. Fork this repository and clone it to your local machine
+2. Open Chrome and navigate to `chrome://extensions/`
+3. Enable "Developer mode" in the top right
+4. Click "Load unpacked" and select this directory
