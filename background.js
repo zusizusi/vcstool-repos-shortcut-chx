@@ -16,7 +16,7 @@ const browserAPI = (() => {
     // Chrome uses the chrome global
     return chrome;
   }
-  throw new Error("Neither chrome nor browser API is available");
+  throw new Error("Extension API not available. This script must run in a browser extension environment with either Chrome or Firefox APIs.");
 })();
 
 /**
