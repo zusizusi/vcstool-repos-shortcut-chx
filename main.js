@@ -749,8 +749,8 @@ class UrlMonitor {
     if (this.isMonitoring) return;
     this.isMonitoring = true;
 
-    // Strategy 1: Override History API methods to detect pushState/replaceState
-    this.patchHistoryApi();
+    // Strategy 1: Monitor title element changes using MutationObserver
+    this.observeTitleChanges();
 
     // Strategy 2: Listen for popstate events (back/forward navigation)
     window.addEventListener("popstate", this.handlePopState.bind(this));
@@ -784,34 +784,40 @@ class UrlMonitor {
   }
 
   /**
-   * Patch History API to intercept pushState and replaceState calls
+   * Observe title element changes using MutationObserver
+   * GitHub updates the title when navigating via SPA
    */
-  patchHistoryApi() {
+  observeTitleChanges() {
     const self = this;
+    const titleElement = document.querySelector("title");
 
-    // Store original methods
-    const originalPushState = history.pushState;
-    const originalReplaceState = history.replaceState;
+    if (!titleElement) {
+      Logger.warn("Title element not found, will retry");
+      // Retry after a short delay if title element is not yet available
+      setTimeout(() => this.observeTitleChanges(), 100);
+      return;
+    }
 
-    // Override pushState
-    history.pushState = function (...args) {
-      const result = originalPushState.apply(this, args);
-      Logger.debug("pushState called");
-      // Use setTimeout to ensure the URL has been updated
-      setTimeout(() => self.checkUrlChange(), 0);
-      return result;
-    };
+    this.titleObserver = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        if (
+          mutation.type === "childList" ||
+          mutation.type === "characterData"
+        ) {
+          Logger.debug("Title changed, checking URL");
+          self.checkUrlChange();
+          break;
+        }
+      }
+    });
 
-    // Override replaceState
-    history.replaceState = function (...args) {
-      const result = originalReplaceState.apply(this, args);
-      Logger.debug("replaceState called");
-      // Use setTimeout to ensure the URL has been updated
-      setTimeout(() => self.checkUrlChange(), 0);
-      return result;
-    };
+    this.titleObserver.observe(titleElement, {
+      childList: true,
+      characterData: true,
+      subtree: true,
+    });
 
-    Logger.debug("History API patched for URL monitoring");
+    Logger.debug("Title element observer started");
   }
 
   /**
@@ -823,6 +829,11 @@ class UrlMonitor {
 
     window.removeEventListener("popstate", this.handlePopState.bind(this));
     window.removeEventListener("hashchange", this.handleHashChange.bind(this));
+
+    if (this.titleObserver) {
+      this.titleObserver.disconnect();
+      this.titleObserver = null;
+    }
 
     if (this.pollIntervalId) {
       clearInterval(this.pollIntervalId);
