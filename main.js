@@ -26,7 +26,6 @@ const CONFIG = {
     INTERVAL: 300,
   },
   DEBOUNCE_DELAY: 100,
-  URL_CHECK_INTERVAL: 500, // Interval for URL polling as fallback
   DEBUG: false,
 };
 
@@ -702,150 +701,34 @@ class VCSToolsExtension {
     this.isInitialized = false;
     this.scheduleInitWithRetries();
   }
-
-  /**
-   * Initialize URL monitoring
-   * Now handled by UrlMonitor class, this method just processes the initial URL
-   */
-  initUrlMonitoring() {
-    // Process initial URL
-    this.processUrl(window.location.href);
-    Logger.info("Initial URL processed");
-  }
 }
 
 // Initialize the extension
 const vcsToolsExtension = new VCSToolsExtension();
-vcsToolsExtension.initUrlMonitoring();
 
 /**
- * URL Monitor class for detecting navigation changes without webNavigation API
- * Uses multiple strategies to detect URL changes in SPAs like GitHub
+ * Handle page transition (URL change) and process the current URL
  */
-class UrlMonitor {
-  constructor(callback) {
-    this.callback = callback;
-    this.lastUrl = window.location.href;
-    this.pollIntervalId = null;
-    this.isMonitoring = false;
-  }
+const handlePageTransition = () => {
+  Logger.info("Page transitioned to:", location.href);
+  vcsToolsExtension.processUrl(location.href);
+};
 
-  /**
-   * Check if URL has changed and trigger callback if so
-   */
-  checkUrlChange() {
-    const currentUrl = window.location.href;
-    if (currentUrl !== this.lastUrl) {
-      Logger.info(`URL changed: ${this.lastUrl} -> ${currentUrl}`);
-      this.lastUrl = currentUrl;
-      this.callback(currentUrl);
-    }
-  }
+// 1. Execute on initial page load
+handlePageTransition();
 
-  /**
-   * Start monitoring URL changes
-   */
-  start() {
-    if (this.isMonitoring) return;
-    this.isMonitoring = true;
-
-    // Strategy 1: Monitor title element changes using MutationObserver
-    this.observeTitleChanges();
-
-    // Strategy 2: Listen for popstate events (back/forward navigation)
-    window.addEventListener("popstate", this.handlePopState.bind(this));
-
-    // Strategy 3: Listen for hashchange events
-    window.addEventListener("hashchange", this.handleHashChange.bind(this));
-
-    // Strategy 4: Polling as a fallback for edge cases
-    this.pollIntervalId = setInterval(
-      () => this.checkUrlChange(),
-      CONFIG.URL_CHECK_INTERVAL
-    );
-
-    Logger.info("URL monitoring started (content script based)");
-  }
-
-  /**
-   * Handle popstate events
-   */
-  handlePopState() {
-    Logger.debug("Popstate event detected");
-    this.checkUrlChange();
-  }
-
-  /**
-   * Handle hashchange events
-   */
-  handleHashChange() {
-    Logger.debug("Hashchange event detected");
-    this.checkUrlChange();
-  }
-
-  /**
-   * Observe title element changes using MutationObserver
-   * GitHub updates the title when navigating via SPA
-   */
-  observeTitleChanges() {
-    const self = this;
-    const titleElement = document.querySelector("title");
-
-    if (!titleElement) {
-      Logger.warn("Title element not found, will retry");
-      // Retry after a short delay if title element is not yet available
-      setTimeout(() => this.observeTitleChanges(), 100);
-      return;
-    }
-
-    this.titleObserver = new MutationObserver((mutations) => {
-      for (const mutation of mutations) {
-        if (
-          mutation.type === "childList" ||
-          mutation.type === "characterData"
-        ) {
-          Logger.debug("Title changed, checking URL");
-          self.checkUrlChange();
-          break;
-        }
-      }
-    });
-
-    this.titleObserver.observe(titleElement, {
-      childList: true,
-      characterData: true,
-      subtree: true,
-    });
-
-    Logger.debug("Title element observer started");
-  }
-
-  /**
-   * Stop monitoring URL changes
-   */
-  stop() {
-    if (!this.isMonitoring) return;
-    this.isMonitoring = false;
-
-    window.removeEventListener("popstate", this.handlePopState.bind(this));
-    window.removeEventListener("hashchange", this.handleHashChange.bind(this));
-
-    if (this.titleObserver) {
-      this.titleObserver.disconnect();
-      this.titleObserver = null;
-    }
-
-    if (this.pollIntervalId) {
-      clearInterval(this.pollIntervalId);
-      this.pollIntervalId = null;
-    }
-
-    Logger.info("URL monitoring stopped");
-  }
-}
-
-// Initialize the extension with URL monitoring
-const urlMonitor = new UrlMonitor((url) => {
-  vcsToolsExtension.processUrl(url);
+// 2. Monitor <title> tag changes (for SPA navigation)
+const titleObserver = new MutationObserver(() => {
+  // Title changed = consider it as a page transition
+  handlePageTransition();
 });
-urlMonitor.start();
+
+const titleElement = document.querySelector("title");
+if (titleElement) {
+  titleObserver.observe(titleElement, {
+    childList: true, // Detect text node changes
+    subtree: true,
+    characterData: true,
+  });
+  Logger.info("Title observer started for SPA navigation detection");
+}
