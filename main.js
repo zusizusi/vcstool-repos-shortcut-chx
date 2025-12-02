@@ -2,22 +2,10 @@
  * Content script for vcstool repos shortcut extension
  * Adds shortcut buttons to open repository URLs from .repos files on GitHub
  * Compatible with both Chrome and Firefox
+ *
+ * This version monitors URL changes directly in the content script
+ * without requiring webNavigation permission.
  */
-
-/**
- * Browser API compatibility layer
- */
-const browserAPI = (() => {
-  // Check if we're in Firefox or Chrome
-  if (typeof browser !== "undefined") {
-    // Firefox uses the browser global
-    return browser;
-  } else if (typeof chrome !== "undefined") {
-    // Chrome uses the chrome global
-    return chrome;
-  }
-  return null; // No extension API available
-})();
 
 /**
  * Configuration constants
@@ -38,6 +26,7 @@ const CONFIG = {
     INTERVAL: 300,
   },
   DEBOUNCE_DELAY: 100,
+  URL_CHECK_INTERVAL: 500, // Interval for URL polling as fallback
   DEBUG: false,
 };
 
@@ -716,25 +705,136 @@ class VCSToolsExtension {
 
   /**
    * Initialize URL monitoring
+   * Now handled by UrlMonitor class, this method just processes the initial URL
    */
   initUrlMonitoring() {
     // Process initial URL
     this.processUrl(window.location.href);
-
-    // Listen for messages from background script
-    if (browserAPI && browserAPI.runtime && browserAPI.runtime.onMessage) {
-      browserAPI.runtime.onMessage.addListener((message) => {
-        if (message && message.type === "VCSTOOL_REPOS_URL_CHANGE_DETECTED") {
-          Logger.info("Received URL change message:", message.url);
-          this.processUrl(message.url);
-        }
-      });
-    }
-
-    Logger.info("URL monitoring initialized");
+    Logger.info("Initial URL processed");
   }
 }
 
 // Initialize the extension
 const vcsToolsExtension = new VCSToolsExtension();
 vcsToolsExtension.initUrlMonitoring();
+
+/**
+ * URL Monitor class for detecting navigation changes without webNavigation API
+ * Uses multiple strategies to detect URL changes in SPAs like GitHub
+ */
+class UrlMonitor {
+  constructor(callback) {
+    this.callback = callback;
+    this.lastUrl = window.location.href;
+    this.pollIntervalId = null;
+    this.isMonitoring = false;
+  }
+
+  /**
+   * Check if URL has changed and trigger callback if so
+   */
+  checkUrlChange() {
+    const currentUrl = window.location.href;
+    if (currentUrl !== this.lastUrl) {
+      Logger.info(`URL changed: ${this.lastUrl} -> ${currentUrl}`);
+      this.lastUrl = currentUrl;
+      this.callback(currentUrl);
+    }
+  }
+
+  /**
+   * Start monitoring URL changes
+   */
+  start() {
+    if (this.isMonitoring) return;
+    this.isMonitoring = true;
+
+    // Strategy 1: Override History API methods to detect pushState/replaceState
+    this.patchHistoryApi();
+
+    // Strategy 2: Listen for popstate events (back/forward navigation)
+    window.addEventListener("popstate", this.handlePopState.bind(this));
+
+    // Strategy 3: Listen for hashchange events
+    window.addEventListener("hashchange", this.handleHashChange.bind(this));
+
+    // Strategy 4: Polling as a fallback for edge cases
+    this.pollIntervalId = setInterval(
+      () => this.checkUrlChange(),
+      CONFIG.URL_CHECK_INTERVAL
+    );
+
+    Logger.info("URL monitoring started (content script based)");
+  }
+
+  /**
+   * Handle popstate events
+   */
+  handlePopState() {
+    Logger.debug("Popstate event detected");
+    this.checkUrlChange();
+  }
+
+  /**
+   * Handle hashchange events
+   */
+  handleHashChange() {
+    Logger.debug("Hashchange event detected");
+    this.checkUrlChange();
+  }
+
+  /**
+   * Patch History API to intercept pushState and replaceState calls
+   */
+  patchHistoryApi() {
+    const self = this;
+
+    // Store original methods
+    const originalPushState = history.pushState;
+    const originalReplaceState = history.replaceState;
+
+    // Override pushState
+    history.pushState = function (...args) {
+      const result = originalPushState.apply(this, args);
+      Logger.debug("pushState called");
+      // Use setTimeout to ensure the URL has been updated
+      setTimeout(() => self.checkUrlChange(), 0);
+      return result;
+    };
+
+    // Override replaceState
+    history.replaceState = function (...args) {
+      const result = originalReplaceState.apply(this, args);
+      Logger.debug("replaceState called");
+      // Use setTimeout to ensure the URL has been updated
+      setTimeout(() => self.checkUrlChange(), 0);
+      return result;
+    };
+
+    Logger.debug("History API patched for URL monitoring");
+  }
+
+  /**
+   * Stop monitoring URL changes
+   */
+  stop() {
+    if (!this.isMonitoring) return;
+    this.isMonitoring = false;
+
+    window.removeEventListener("popstate", this.handlePopState.bind(this));
+    window.removeEventListener("hashchange", this.handleHashChange.bind(this));
+
+    if (this.pollIntervalId) {
+      clearInterval(this.pollIntervalId);
+      this.pollIntervalId = null;
+    }
+
+    Logger.info("URL monitoring stopped");
+  }
+}
+
+// Initialize the extension with URL monitoring
+const urlMonitor = new UrlMonitor((url) => {
+  vcsToolsExtension.processUrl(url);
+});
+urlMonitor.start();
