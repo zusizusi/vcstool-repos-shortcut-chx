@@ -165,18 +165,23 @@ class App {
     this.timer = null;
     this.fileTreeObserver = null;
     this.contentObserver = null;
-    this.handleResize = this.update.bind(this);
+    this.repos = null;
+
+    this.update = this.update.bind(this);
+    this.updateWithoutReparse = this.updateWithoutReparse.bind(this);
+
+    this.handleResize = this.updateWithoutReparse;
     this.handleScroll = () => {
       clearTimeout(this.timer);
-      this.timer = setTimeout(this.handleResize, CONFIG.DEBOUNCE);
+      this.timer = setTimeout(() => this.update(true), CONFIG.DEBOUNCE);
     };
     this.handleContentChange = () => {
       clearTimeout(this.timer);
-      this.timer = setTimeout(this.handleResize, CONFIG.DEBOUNCE);
+      this.timer = setTimeout(() => this.update(true), CONFIG.DEBOUNCE);
     };
   }
 
-  update() {
+  update(reparse = true) {
     const container = document.getElementsByClassName(
       CONFIG.SELECTORS.CODE_FILE
     )[0];
@@ -189,8 +194,14 @@ class App {
     const lines = linesContainer.getElementsByClassName(
       CONFIG.SELECTORS.FILE_LINE
     );
-    const repos = Utils.parseRepositories(lines);
-    UI.renderButtons(repos, container);
+    if (reparse || !this.repos) {
+      this.repos = Utils.parseRepositories(lines);
+    }
+    UI.renderButtons(this.repos, container);
+  }
+
+  updateWithoutReparse() {
+    this.update(false);
   }
 
   observeContent(container) {
@@ -246,6 +257,7 @@ class App {
     this.lastUrl = url;
 
     UI.removeButtons();
+    this.repos = null;
     if (this.fileTreeObserver) {
       this.fileTreeObserver.disconnect();
       this.fileTreeObserver = null;
