@@ -163,8 +163,13 @@ class App {
     this.lastUrl = "";
     this.timer = null;
     this.fileTreeObserver = null;
+    this.contentObserver = null;
     this.handleResize = this.update.bind(this);
     this.handleScroll = () => {
+      clearTimeout(this.timer);
+      this.timer = setTimeout(this.handleResize, CONFIG.DEBOUNCE);
+    };
+    this.handleContentChange = () => {
       clearTimeout(this.timer);
       this.timer = setTimeout(this.handleResize, CONFIG.DEBOUNCE);
     };
@@ -185,6 +190,19 @@ class App {
     );
     const repos = Utils.parseRepositories(lines);
     UI.renderButtons(repos, container);
+  }
+
+  observeContent(container) {
+    if (this.contentObserver) return;
+
+    this.contentObserver = new MutationObserver(() => {
+      this.handleContentChange();
+    });
+
+    this.contentObserver.observe(container, {
+      childList: true,
+      subtree: true,
+    });
   }
 
   observeFileTree() {
@@ -221,6 +239,7 @@ class App {
       if (container) {
         this.update();
         this.observeFileTree();
+        this.observeContent(container);
         window.addEventListener("resize", this.handleResize);
         window.addEventListener("scroll", this.handleScroll, { passive: true });
       } else if (attempts++ < CONFIG.RETRY.MAX) {
@@ -238,6 +257,10 @@ class App {
     if (this.fileTreeObserver) {
       this.fileTreeObserver.disconnect();
       this.fileTreeObserver = null;
+    }
+    if (this.contentObserver) {
+      this.contentObserver.disconnect();
+      this.contentObserver = null;
     }
     window.removeEventListener("resize", this.handleResize);
     window.removeEventListener("scroll", this.handleScroll);
