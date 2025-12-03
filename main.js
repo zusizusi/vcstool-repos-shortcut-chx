@@ -9,6 +9,7 @@ const CONFIG = {
     CODE_LINES: "react-code-lines",
     FILE_LINE: "react-file-line",
     BUTTON: "open-repo-button",
+    FILE_TREE_ID: "repos-file-tree",
   },
   RETRY: { MAX: 10, INTERVAL: 300 },
   DEBOUNCE: 100,
@@ -208,24 +209,15 @@ class App {
   observeFileTree() {
     if (this.fileTreeObserver) return;
 
-    this.fileTreeObserver = new MutationObserver((mutations) => {
-      for (const mutation of mutations) {
-        if (
-          mutation.type === "attributes" &&
-          (mutation.attributeName === "aria-expanded" ||
-            mutation.attributeName === "data-is-hidden")
-        ) {
-          setTimeout(() => this.update(), 200); // Wait for layout transition
-        }
-      }
+    const fileTree = document.getElementById(CONFIG.SELECTORS.FILE_TREE_ID);
+    if (!fileTree) return;
+
+    this.fileTreeObserver = new ResizeObserver(() => {
+      clearTimeout(this.timer);
+      this.timer = setTimeout(this.handleResize, CONFIG.DEBOUNCE);
     });
 
-    // Observe body to catch the elements even if they are re-rendered
-    this.fileTreeObserver.observe(document.body, {
-      attributes: true,
-      subtree: true,
-      attributeFilter: ["aria-expanded", "data-is-hidden"],
-    });
+    this.fileTreeObserver.observe(fileTree);
   }
 
   init() {
@@ -278,3 +270,7 @@ if (titleElement) {
   new MutationObserver(checkUrl).observe(titleElement, { childList: true });
 }
 checkUrl();
+
+// Fallback for SPA navigations where <title> is not updated (e.g. some file-tree navigations)
+// Periodically check the URL and trigger processing only when it actually changes.
+setInterval(checkUrl, 1000);
