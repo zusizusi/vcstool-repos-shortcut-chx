@@ -89,6 +89,7 @@ const UI = {
     const link = document.createElement("a");
     link.href = repo.url;
     link.target = "_blank";
+    link.rel = "noopener noreferrer";
     link.className = CONFIG.SELECTORS.BUTTON;
 
     Object.assign(link.style, {
@@ -96,7 +97,7 @@ const UI = {
       zIndex: "999",
       top: `${top}px`,
       left: `${left}px`,
-      transform: "translate(-50%, -50%)", // Center on the point
+      transform: "translate(-50%, -50%)", // Center the button at the vertical center of the line and horizontally at 'left'
       textDecoration: "none",
     });
 
@@ -166,6 +167,7 @@ class App {
     this.timer = null;
     this.fileTreeObserver = null;
     this.contentObserver = null;
+    this.titleObserver = null;
     this.repos = null;
     this.listenersRegistered = false;
 
@@ -243,7 +245,9 @@ class App {
   }
 
   observeContent(container) {
-    if (this.contentObserver) return;
+    if (this.contentObserver) {
+      this.contentObserver.disconnect();
+    }
 
     this.contentObserver = new MutationObserver(() => {
       this.handleContentChange();
@@ -268,6 +272,40 @@ class App {
     });
 
     this.fileTreeObserver.observe(fileTree);
+  }
+
+  checkUrl() {
+    const currentUrl = location.href;
+    const currentTitle = document.title;
+    console.debug("[vcstool-repos-shortcut] checkUrl", {
+      currentUrl,
+      currentTitle,
+    });
+    this.processUrl(currentUrl);
+  }
+
+  setupTitleObserver() {
+    const headElement = document.querySelector("head");
+    if (headElement) {
+      this.titleObserver = new MutationObserver(() => {
+        // Check if title actually changed to avoid redundant processing
+        if (document.title !== this.lastTitle) {
+          console.debug(
+            "[vcstool-repos-shortcut] head mutation & title changed",
+            {
+              newTitle: document.title,
+              oldTitle: this.lastTitle,
+              url: location.href,
+            }
+          );
+          this.checkUrl();
+        }
+      });
+      this.titleObserver.observe(headElement, {
+        childList: true,
+        subtree: true,
+      });
+    }
   }
 
   init() {
@@ -306,42 +344,21 @@ class App {
     UI.removeButtons();
     this.repos = null;
     this.unregisterGlobalListeners();
+    clearTimeout(this.timer);
 
     this.init();
   }
 }
 
 const app = new App();
-const checkUrl = () => {
-  const currentUrl = location.href;
-  const currentTitle = document.title;
-  console.debug("[vcstool-repos-shortcut] checkUrl", {
-    currentUrl,
-    currentTitle,
-  });
-  app.processUrl(currentUrl);
-};
 
 // SPA handling
 // Watch document.head for changes to <title> or replacement of <title> element
-const headElement = document.querySelector("head");
-if (headElement) {
-  new MutationObserver(() => {
-    // Check if title actually changed to avoid redundant processing
-    if (document.title !== app.lastTitle) {
-      console.debug("[vcstool-repos-shortcut] head mutation & title changed", {
-        newTitle: document.title,
-        oldTitle: app.lastTitle,
-        url: location.href,
-      });
-      checkUrl();
-    }
-  }).observe(headElement, { childList: true, subtree: true });
-}
+app.setupTitleObserver();
 
 console.debug("[vcstool-repos-shortcut] initial load", {
   initialUrl: location.href,
   initialTitle: document.title,
 });
 // Initial load
-checkUrl();
+app.checkUrl();
