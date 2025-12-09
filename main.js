@@ -94,7 +94,6 @@ const UI = {
   createButton(repo, top, left) {
     const link = document.createElement("a");
     link.href = repo.url;
-    link.target = "_blank";
     link.rel = "noopener noreferrer";
     link.className = CONFIG.SELECTORS.BUTTON;
 
