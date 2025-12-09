@@ -9,7 +9,6 @@ const CONFIG = {
     CODE_LINES: "react-code-lines",
     FILE_LINE: "react-file-line",
     BUTTON: "open-repo-button",
-    FILE_TREE_ID: "repos-file-tree",
   },
   RETRY: { MAX: 10, INTERVAL: 300 },
   DEBOUNCE: 100,
@@ -168,7 +167,7 @@ class App {
     this.lastUrl = "";
     this.lastTitle = "";
     this.timer = null;
-    this.fileTreeObserver = null;
+    this.containerResizeObserver = null;
     this.contentObserver = null;
     this.titleObserver = null;
     this.repos = null;
@@ -192,7 +191,7 @@ class App {
     if (this.listenersRegistered) return;
     this.listenersRegistered = true;
 
-    this.observeFileTree();
+    this.observeContainerResize(container);
     this.observeContent(container);
     window.addEventListener("resize", this.handleResize, { passive: true });
     window.addEventListener("scroll", this.handleScroll, { passive: true });
@@ -202,17 +201,17 @@ class App {
     if (!this.listenersRegistered) return;
     this.listenersRegistered = false;
 
-    if (this.fileTreeObserver) {
-      this.fileTreeObserver.disconnect();
-      this.fileTreeObserver = null;
+    if (this.containerResizeObserver) {
+      this.containerResizeObserver.disconnect();
+      this.containerResizeObserver = null;
     }
     if (this.contentObserver) {
       this.contentObserver.disconnect();
       this.contentObserver = null;
     }
 
-    window.removeEventListener("resize", this.handleResize, { passive: true });
-    window.removeEventListener("scroll", this.handleScroll, { passive: true });
+    window.removeEventListener("resize", this.handleResize);
+    window.removeEventListener("scroll", this.handleScroll);
   }
 
   update(reparse = true) {
@@ -262,18 +261,15 @@ class App {
     });
   }
 
-  observeFileTree() {
-    if (this.fileTreeObserver) return;
+  observeContainerResize(container) {
+    if (this.containerResizeObserver) return;
 
-    const fileTree = document.getElementById(CONFIG.SELECTORS.FILE_TREE_ID);
-    if (!fileTree) return;
-
-    this.fileTreeObserver = new ResizeObserver(() => {
+    this.containerResizeObserver = new ResizeObserver(() => {
       clearTimeout(this.timer);
       this.timer = setTimeout(this.handleResize, CONFIG.DEBOUNCE);
     });
 
-    this.fileTreeObserver.observe(fileTree);
+    this.containerResizeObserver.observe(container);
   }
 
   checkUrl() {
