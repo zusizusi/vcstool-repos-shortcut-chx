@@ -15,9 +15,15 @@ const CONFIG = {
   DEBOUNCE: 100,
 };
 
+const REGEX = {
+  SSH_URL: /^git@([\w.-]+):([\w.-]+)\/([\w.-]+)\.git$/,
+  REPOS_KEY: /^[\w.\-\/_]+:\s*(#.*)?$/,
+  COMMIT_HASH: /^[0-9a-f]{40}$/,
+};
+
 const Utils = {
   convertSshToHttp(url) {
-    const match = url.match(/^git@([\w.-]+):([\w.-]+)\/([\w.-]+)\.git$/);
+    const match = url.match(REGEX.SSH_URL);
     if (!match) return null;
     return `https://${match[1]}/${match[2]}/${match[3]}.git`;
   },
@@ -57,7 +63,7 @@ const Utils = {
 
       if (repo.url && repo.type?.includes("git")) {
         if (repo.version) {
-          const isHash = /^[0-9a-f]{40}$/.test(repo.version);
+          const isHash = REGEX.COMMIT_HASH.test(repo.version);
           repo.url =
             repo.url.replace(/\.git$/, "") +
             (isHash ? `/blob/${repo.version}` : `/tree/${repo.version}`);
@@ -70,7 +76,7 @@ const Utils = {
 
     Array.from(codeLines).forEach((line) => {
       const text = line.innerText.trim();
-      if (/^[\w.\-\/_]+:\s*(#.*)?$/.test(text)) {
+      if (REGEX.REPOS_KEY.test(text)) {
         if (line.id !== "LC1" || text !== "repositories:") {
           processBlock(currentBlock);
           currentBlock = [line];
@@ -140,6 +146,7 @@ const UI = {
 
     const containerRect = container.getBoundingClientRect();
     const left = containerRect.left + window.scrollX;
+    const scrollY = window.scrollY;
 
     Object.values(repos).forEach((repo) => {
       const line = document.getElementById(repo.key);
@@ -148,7 +155,7 @@ const UI = {
       // Position at the start of the line, centered vertically
       this.createButton(
         repo,
-        rect.top + window.scrollY + rect.height / 2,
+        rect.top + scrollY + rect.height / 2,
         left
       );
     });
