@@ -117,6 +117,7 @@ const UI = {
       minWidth: "26px",
       minHeight: "26px",
       transition: "all 0.2s ease",
+      transformOrigin: "center",
     });
 
     btn.onmouseenter = () => {
@@ -166,6 +167,7 @@ class App {
     this.fileTreeObserver = null;
     this.contentObserver = null;
     this.repos = null;
+    this.listenersRegistered = false;
 
     this.update = this.update.bind(this);
     this.updateWithoutReparse = this.updateWithoutReparse.bind(this);
@@ -179,6 +181,33 @@ class App {
       clearTimeout(this.timer);
       this.timer = setTimeout(() => this.update(true), CONFIG.DEBOUNCE);
     };
+  }
+
+  registerGlobalListeners(container) {
+    if (this.listenersRegistered) return;
+    this.listenersRegistered = true;
+
+    this.observeFileTree();
+    this.observeContent(container);
+    window.addEventListener("resize", this.handleResize);
+    window.addEventListener("scroll", this.handleScroll, { passive: true });
+  }
+
+  unregisterGlobalListeners() {
+    if (!this.listenersRegistered) return;
+    this.listenersRegistered = false;
+
+    if (this.fileTreeObserver) {
+      this.fileTreeObserver.disconnect();
+      this.fileTreeObserver = null;
+    }
+    if (this.contentObserver) {
+      this.contentObserver.disconnect();
+      this.contentObserver = null;
+    }
+
+    window.removeEventListener("resize", this.handleResize);
+    window.removeEventListener("scroll", this.handleScroll);
   }
 
   update(reparse = true) {
@@ -241,10 +270,7 @@ class App {
       )[0];
       if (container) {
         this.update();
-        this.observeFileTree();
-        this.observeContent(container);
-        window.addEventListener("resize", this.handleResize);
-        window.addEventListener("scroll", this.handleScroll, { passive: true });
+        this.registerGlobalListeners(container);
       } else if (attempts++ < CONFIG.RETRY.MAX) {
         setTimeout(tryLoad, CONFIG.RETRY.INTERVAL);
       }
@@ -258,16 +284,7 @@ class App {
 
     UI.removeButtons();
     this.repos = null;
-    if (this.fileTreeObserver) {
-      this.fileTreeObserver.disconnect();
-      this.fileTreeObserver = null;
-    }
-    if (this.contentObserver) {
-      this.contentObserver.disconnect();
-      this.contentObserver = null;
-    }
-    window.removeEventListener("resize", this.handleResize);
-    window.removeEventListener("scroll", this.handleScroll);
+    this.unregisterGlobalListeners();
 
     this.init();
   }
