@@ -74,17 +74,17 @@ const Utils = {
       }
     };
 
-    Array.from(codeLines).forEach((line) => {
+    for (const line of codeLines) {
       const text = line.innerText.trim();
       if (REGEX.REPOS_KEY.test(text)) {
         if (line.id !== "LC1" || text !== "repositories:") {
           processBlock(currentBlock);
           currentBlock = [line];
-          return;
+          continue;
         }
       }
       if (currentBlock.length) currentBlock.push(line);
-    });
+    }
     processBlock(currentBlock);
     return repos;
   },
@@ -153,11 +153,7 @@ const UI = {
       if (!line) return;
       const rect = line.getBoundingClientRect();
       // Position at the start of the line, centered vertically
-      this.createButton(
-        repo,
-        rect.top + scrollY + rect.height / 2,
-        left
-      );
+      this.createButton(repo, rect.top + scrollY + rect.height / 2, left);
     });
   },
 
@@ -199,7 +195,7 @@ class App {
 
     this.observeFileTree();
     this.observeContent(container);
-    window.addEventListener("resize", this.handleResize);
+    window.addEventListener("resize", this.handleResize, { passive: true });
     window.addEventListener("scroll", this.handleScroll, { passive: true });
   }
 
@@ -216,8 +212,8 @@ class App {
       this.contentObserver = null;
     }
 
-    window.removeEventListener("resize", this.handleResize);
-    window.removeEventListener("scroll", this.handleScroll);
+    window.removeEventListener("resize", this.handleResize, { passive: true });
+    window.removeEventListener("scroll", this.handleScroll, { passive: true });
   }
 
   update(reparse = true) {
@@ -264,7 +260,6 @@ class App {
     this.contentObserver.observe(container, {
       childList: true,
       subtree: true,
-      characterData: true,
     });
   }
 
