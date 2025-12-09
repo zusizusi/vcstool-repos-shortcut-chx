@@ -47,12 +47,12 @@ const Utils = {
         if (!valParts.length) return;
         let val = valParts.join(":").split("#")[0].trim();
 
-        if (key === "type") repo.type = val;
-        if (key === "url") {
+        if (key.trim() === "type") repo.type = val;
+        if (key.trim() === "url") {
           if (val.startsWith("git@")) val = Utils.convertSshToHttp(val);
           repo.url = val;
         }
-        if (key === "version") repo.version = val;
+        if (key.trim() === "version") repo.version = val;
       });
 
       if (repo.url && repo.type?.includes("git")) {
