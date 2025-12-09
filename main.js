@@ -164,6 +164,7 @@ const UI = {
 class App {
   constructor() {
     this.lastUrl = "";
+    this.lastTitle = "";
     this.timer = null;
     this.fileTreeObserver = null;
     this.contentObserver = null;
