@@ -223,8 +223,17 @@ class App {
     const lines = linesContainer.getElementsByClassName(
       CONFIG.SELECTORS.FILE_LINE
     );
-    if (reparse || !this.repos) {
+
+    if (reparse || !this.repos || Object.keys(this.repos).length === 0) {
       this.repos = Utils.parseRepositories(lines);
+      const count = Object.keys(this.repos).length;
+      if (count > 0) {
+        console.debug("[vcstool-repos-shortcut] parsed repos", { count });
+      } else if (lines.length > 0) {
+        console.debug("[vcstool-repos-shortcut] parsed 0 repos from lines", {
+          linesCount: lines.length,
+        });
+      }
     }
     UI.renderButtons(this.repos, container);
   }
@@ -243,6 +252,7 @@ class App {
     this.contentObserver.observe(container, {
       childList: true,
       subtree: true,
+      characterData: true,
     });
   }
 
@@ -268,19 +278,30 @@ class App {
       const container = document.getElementsByClassName(
         CONFIG.SELECTORS.CODE_FILE
       )[0];
+
       if (container) {
         this.update();
         this.registerGlobalListeners(container);
       } else if (attempts++ < CONFIG.RETRY.MAX) {
         setTimeout(tryLoad, CONFIG.RETRY.INTERVAL);
+      } else {
+        console.debug(
+          "[vcstool-repos-shortcut] tryLoad failed: max attempts reached"
+        );
       }
     };
     tryLoad();
   }
 
   processUrl(url) {
+    console.debug("[vcstool-repos-shortcut] processUrl", {
+      url,
+      lastUrl: this.lastUrl,
+      isRepos: Utils.isReposFile(url),
+    });
     if (url === this.lastUrl) return;
     this.lastUrl = url;
+    this.lastTitle = document.title; // Keep track of title too
 
     UI.removeButtons();
     this.repos = null;
@@ -291,15 +312,36 @@ class App {
 }
 
 const app = new App();
-const checkUrl = () => app.processUrl(location.href);
+const checkUrl = () => {
+  const currentUrl = location.href;
+  const currentTitle = document.title;
+  console.debug("[vcstool-repos-shortcut] checkUrl", {
+    currentUrl,
+    currentTitle,
+  });
+  app.processUrl(currentUrl);
+};
 
 // SPA handling
-const titleElement = document.querySelector("title");
-if (titleElement) {
-  new MutationObserver(checkUrl).observe(titleElement, { childList: true });
+// Watch document.head for changes to <title> or replacement of <title> element
+const headElement = document.querySelector("head");
+if (headElement) {
+  new MutationObserver(() => {
+    // Check if title actually changed to avoid redundant processing
+    if (document.title !== app.lastTitle) {
+      console.debug("[vcstool-repos-shortcut] head mutation & title changed", {
+        newTitle: document.title,
+        oldTitle: app.lastTitle,
+        url: location.href,
+      });
+      checkUrl();
+    }
+  }).observe(headElement, { childList: true, subtree: true });
 }
-checkUrl();
 
-// Fallback for SPA navigations where <title> is not updated (e.g. some file-tree navigations)
-// Periodically check the URL and trigger processing only when it actually changes.
-setInterval(checkUrl, 1000);
+console.debug("[vcstool-repos-shortcut] initial load", {
+  initialUrl: location.href,
+  initialTitle: document.title,
+});
+// Initial load
+checkUrl();
