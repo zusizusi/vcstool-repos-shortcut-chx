@@ -15,8 +15,10 @@ const CONFIG = {
 };
 
 const REGEX = {
-  /** git@host:path/to/repo.git (path may contain multiple segments, e.g. GitLab groups) */
-  SSH_URL: /^git@([\w.-]+):(.+\.git)$/,
+  /** SCP-style git@host:path (path optional .git; multiple segments for GitLab groups) */
+  SSH_SCP: /^git@([\w.-]+):(.+)$/,
+  /** ssh://git@host/path or ssh://git@host:port/path */
+  SSH_URL_FORM: /^ssh:\/\/git@([\w.-]+)(?::\d+)?\/(.+)$/i,
   REPOS_KEY: /^[\w.\-\/_]+:\s*(#.*)?$/,
   COMMIT_HASH: /^[0-9a-f]{40}$/,
   /** Ansible role src pointing at a tarball, not a git web UI */
@@ -25,9 +27,11 @@ const REGEX = {
 
 const Utils = {
   convertSshToHttp(url) {
-    const match = url.match(REGEX.SSH_URL);
+    const match = url.match(REGEX.SSH_SCP);
     if (!match) return null;
-    return `https://${match[1]}/${match[2]}`;
+    const path = match[2].trim();
+    if (!path) return null;
+    return `https://${match[1]}/${path}`;
   },
 
   /** Strip trailing " # comment" from a value (whitespace before #). */
@@ -40,7 +44,9 @@ const Utils = {
   normalizeGitUrl(url) {
     if (!url || typeof url !== "string") return null;
     let u = String(url).trim().replace(/^git\+/, "").split("#")[0].trim();
-    if (u.startsWith("git@")) u = this.convertSshToHttp(u) || u;
+    const sshUrl = u.match(REGEX.SSH_URL_FORM);
+    if (sshUrl) u = `https://${sshUrl[1]}/${sshUrl[2]}`;
+    else if (u.startsWith("git@")) u = this.convertSshToHttp(u) || u;
     if (!/^https?:\/\//.test(u)) return null;
     return u;
   },
