@@ -168,14 +168,20 @@ const Utils = {
       if (role.scm === "hg") return;
       if (Utils.isGalaxyArchiveHttpUrl(url)) return;
 
-      role.url = url.replace(/\.git$/, "");
+      const baseUrl = url.replace(/\.git$/, "");
+      role.url = baseUrl;
       if (role.version) {
         const ver = Utils.stripInlineComment(role.version);
         const isHash = REGEX.COMMIT_HASH.test(ver);
         role.url += isHash ? `/blob/${ver}` : `/tree/${ver}`;
       }
 
-      const nameFromUrl = role.url.replace(/^https?:\/\//, "").split("/").slice(-2).join("/").replace(/\.git$/, "");
+      const nameFromUrl = baseUrl
+        .replace(/^https?:\/\//, "")
+        .split("/")
+        .slice(-2)
+        .join("/")
+        .replace(/\.git$/, "");
       const name = (/^https?:\/\/|git@/.test(role.name || "") ? nameFromUrl : role.name) || nameFromUrl || "repo";
       if (repos[name]) return;
       repos[name] = { ...role, name };
