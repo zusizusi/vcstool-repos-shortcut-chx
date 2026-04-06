@@ -15,16 +15,19 @@ const CONFIG = {
 };
 
 const REGEX = {
-  SSH_URL: /^git@([\w.-]+):([\w.-]+)\/([\w.-]+)\.git$/,
+  /** git@host:path/to/repo.git (path may contain multiple segments, e.g. GitLab groups) */
+  SSH_URL: /^git@([\w.-]+):(.+\.git)$/,
   REPOS_KEY: /^[\w.\-\/_]+:\s*(#.*)?$/,
   COMMIT_HASH: /^[0-9a-f]{40}$/,
+  /** Ansible role src pointing at a tarball, not a git web UI */
+  GALAXY_ARCHIVE_SRC: /\.(?:tar\.gz|tar\.bz2|tar\.xz|tgz)$/i,
 };
 
 const Utils = {
   convertSshToHttp(url) {
     const match = url.match(REGEX.SSH_URL);
     if (!match) return null;
-    return `https://${match[1]}/${match[2]}/${match[3]}.git`;
+    return `https://${match[1]}/${match[2]}`;
   },
 
   /** Strip trailing " # comment" from a value (whitespace before #). */
@@ -40,6 +43,16 @@ const Utils = {
     if (u.startsWith("git@")) u = this.convertSshToHttp(u) || u;
     if (!/^https?:\/\//.test(u)) return null;
     return u;
+  },
+
+  /** Galaxy role src that is an HTTP archive, not a git repository page. */
+  isGalaxyArchiveHttpUrl(url) {
+    if (!url || typeof url !== "string") return false;
+    try {
+      return REGEX.GALAXY_ARCHIVE_SRC.test(new URL(url).pathname);
+    } catch {
+      return REGEX.GALAXY_ARCHIVE_SRC.test(url);
+    }
   },
 
   isReposFile(url) {
@@ -128,7 +141,7 @@ const Utils = {
       if (!lines.length) return;
       const firstLine = lines[0];
 
-      const role = { name: null, key: firstLine.id, url: null, version: null };
+      const role = { name: null, key: firstLine.id, url: null, version: null, scm: null };
       for (const line of lines) {
         const text = line.innerText.trim();
         if (!text || text.startsWith("#")) continue;
@@ -142,6 +155,7 @@ const Utils = {
         if (key === "name") role.name = val || role.name;
         if (key === "src") role.url = Utils.normalizeGitUrl(val);
         if (key === "version") role.version = val;
+        if (key === "scm") role.scm = val.toLowerCase();
         if (key === "type" && val === "git" && !role.url && role.name)
           role.url = Utils.normalizeGitUrl(role.name);
       }
@@ -151,6 +165,8 @@ const Utils = {
       if (!role.url) return;
       const url = Utils.normalizeGitUrl(role.url);
       if (!url) return;
+      if (role.scm === "hg") return;
+      if (Utils.isGalaxyArchiveHttpUrl(url)) return;
 
       role.url = url.replace(/\.git$/, "");
       if (role.version) {
