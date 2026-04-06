@@ -1,6 +1,6 @@
 /**
- * Content script for vcstool repos shortcut extension
- * Adds shortcut buttons to open repository URLs from .repos files on GitHub
+ * Content script: shortcut buttons to open git repo URLs on GitHub from
+ * vcstool .repos and Ansible Galaxy requirements files.
  */
 
 const CONFIG = {
@@ -27,11 +27,39 @@ const Utils = {
     return `https://${match[1]}/${match[2]}/${match[3]}.git`;
   },
 
+  /** Strip trailing " # comment" from a value (whitespace before #). */
+  stripInlineComment(str) {
+    if (str == null || typeof str !== "string") return "";
+    return str.replace(/\s+#.*$/, "").trim();
+  },
+
+  /** Normalize git URL: strip git+, fragment, convert SSH, validate http(s). */
+  normalizeGitUrl(url) {
+    if (!url || typeof url !== "string") return null;
+    let u = String(url).trim().replace(/^git\+/, "").split("#")[0].trim();
+    if (u.startsWith("git@")) u = this.convertSshToHttp(u) || u;
+    if (!/^https?:\/\//.test(u)) return null;
+    return u;
+  },
+
   isReposFile(url) {
     return url
       .split(/[?#]/)[0]
       .split("/")
       .some((s) => s.includes(".repos"));
+  },
+
+  isGalaxyRequirementsFile(url) {
+    const path = url.split(/[?#]/)[0].toLowerCase();
+    return (
+      path.includes("requirements.yml") ||
+      path.includes("ansible-galaxy-requirements.yaml") ||
+      path.includes("requirements.yaml")
+    );
+  },
+
+  isSupportedFile(url) {
+    return this.isReposFile(url) || this.isGalaxyRequirementsFile(url);
   },
 
   parseRepositories(codeLines) {
@@ -50,13 +78,10 @@ const Utils = {
 
         const [key, ...valParts] = text.split(":");
         if (!valParts.length) return;
-        let val = valParts.join(":").split("#")[0].trim();
+        const val = Utils.stripInlineComment(valParts.join(":"));
 
         if (key.trim() === "type") repo.type = val;
-        if (key.trim() === "url") {
-          if (val.startsWith("git@")) val = Utils.convertSshToHttp(val);
-          repo.url = val;
-        }
+        if (key.trim() === "url") repo.url = Utils.normalizeGitUrl(val);
         if (key.trim() === "version") repo.version = val;
       });
 
@@ -83,6 +108,78 @@ const Utils = {
         }
       }
       if (currentBlock.length) currentBlock.push(line);
+    }
+    processBlock(currentBlock);
+    return repos;
+  },
+
+  /**
+   * Parse Ansible Galaxy requirements (requirements.yml, ansible-galaxy-requirements.yaml).
+   * Supports roles with src/scm: git and collections with type: git.
+   */
+  parseGalaxyRequirements(codeLines) {
+    const repos = {};
+    let currentBlock = [];
+    const listItemStart = /^\s*-\s+/;
+    const isSectionHeader = (trimmed) =>
+      /^(collections|roles):\s*$/.test(trimmed);
+
+    const processBlock = (lines) => {
+      if (!lines.length) return;
+      const firstLine = lines[0];
+
+      const role = { name: null, key: firstLine.id, url: null, version: null };
+      for (const line of lines) {
+        const text = line.innerText.trim();
+        if (!text || text.startsWith("#")) continue;
+
+        const colonIdx = text.indexOf(":");
+        if (colonIdx === -1) continue;
+        let key = text.slice(0, colonIdx).trim();
+        if (key.startsWith("- ")) key = key.slice(2).trim();
+        const val = Utils.stripInlineComment(text.slice(colonIdx + 1));
+
+        if (key === "name") role.name = val || role.name;
+        if (key === "src") role.url = Utils.normalizeGitUrl(val);
+        if (key === "version") role.version = val;
+        if (key === "type" && val === "git" && !role.url && role.name)
+          role.url = Utils.normalizeGitUrl(role.name);
+      }
+      if (!role.url && role.name && /^https?:\/\/|git@/.test(role.name))
+        role.url = Utils.normalizeGitUrl(role.name);
+
+      if (!role.url) return;
+      const url = Utils.normalizeGitUrl(role.url);
+      if (!url) return;
+
+      role.url = url.replace(/\.git$/, "");
+      if (role.version) {
+        const ver = Utils.stripInlineComment(role.version);
+        const isHash = REGEX.COMMIT_HASH.test(ver);
+        role.url += isHash ? `/blob/${ver}` : `/tree/${ver}`;
+      }
+
+      const nameFromUrl = role.url.replace(/^https?:\/\//, "").split("/").slice(-2).join("/").replace(/\.git$/, "");
+      const name = (/^https?:\/\/|git@/.test(role.name || "") ? nameFromUrl : role.name) || nameFromUrl || "repo";
+      if (repos[name]) return;
+      repos[name] = { ...role, name };
+    };
+
+    for (const line of codeLines) {
+      const text = line.innerText;
+      const trimmed = text.trim();
+      if (listItemStart.test(text)) {
+        processBlock(currentBlock);
+        currentBlock = [line];
+        continue;
+      }
+      if (currentBlock.length === 0) continue;
+      if (trimmed === "" || (trimmed.includes(":") && !isSectionHeader(trimmed))) {
+        currentBlock.push(line);
+      } else {
+        processBlock(currentBlock);
+        currentBlock = [];
+      }
     }
     processBlock(currentBlock);
     return repos;
@@ -229,7 +326,9 @@ class App {
     );
 
     if (reparse || !this.repos || Object.keys(this.repos).length === 0) {
-      this.repos = Utils.parseRepositories(lines);
+      this.repos = Utils.isGalaxyRequirementsFile(location.href)
+        ? Utils.parseGalaxyRequirements(lines)
+        : Utils.parseRepositories(lines);
       const count = Object.keys(this.repos).length;
       if (count > 0) {
         console.debug("[vcstool-repos-shortcut] parsed repos", { count });
@@ -307,7 +406,7 @@ class App {
   }
 
   init() {
-    if (!Utils.isReposFile(location.href)) return;
+    if (!Utils.isSupportedFile(location.href)) return;
 
     let attempts = 0;
     const tryLoad = () => {
@@ -333,7 +432,7 @@ class App {
     console.debug("[vcstool-repos-shortcut] processUrl", {
       url,
       lastUrl: this.lastUrl,
-      isRepos: Utils.isReposFile(url),
+      isSupported: Utils.isSupportedFile(url),
     });
     if (url === this.lastUrl) return;
     this.lastUrl = url;
