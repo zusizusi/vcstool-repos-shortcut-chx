@@ -23,6 +23,8 @@ const REGEX = {
   COMMIT_HASH: /^[0-9a-f]{40}$/,
   /** Ansible role src pointing at a tarball, not a git web UI */
   GALAXY_ARCHIVE_SRC: /\.(?:tar\.gz|tar\.bz2|tar\.xz|tgz)$/i,
+  /** role.name that looks like an http(s) or SCP-style git URL (anchored at start) */
+  URL_OR_GIT_AT_START: /^(https?:\/\/|git@)/,
 };
 
 const Utils = {
@@ -165,7 +167,7 @@ const Utils = {
         if (key === "type" && val === "git" && !role.url && role.name)
           role.url = Utils.normalizeGitUrl(role.name);
       }
-      if (!role.url && role.name && /^https?:\/\/|git@/.test(role.name))
+      if (!role.url && role.name && REGEX.URL_OR_GIT_AT_START.test(role.name))
         role.url = Utils.normalizeGitUrl(role.name);
 
       if (!role.url) return;
@@ -188,7 +190,9 @@ const Utils = {
         .slice(-2)
         .join("/")
         .replace(/\.git$/, "");
-      const name = (/^https?:\/\/|git@/.test(role.name || "") ? nameFromUrl : role.name) || nameFromUrl || "repo";
+      const name = (REGEX.URL_OR_GIT_AT_START.test(role.name || "")
+        ? nameFromUrl
+        : role.name) || nameFromUrl || "repo";
       if (repos[name]) return;
       repos[name] = { ...role, name };
     };
