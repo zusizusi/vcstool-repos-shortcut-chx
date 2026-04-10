@@ -1,6 +1,6 @@
-# vcstool repos shortcut chrome extension
+# vcstool & Ansible Galaxy repo shortcut (Chrome extension)
 
-A Chrome extension that adds a shortcut button to open the URLs of repositories listed in the repos file.
+A Chrome extension that adds shortcut buttons on GitHub to open git repository URLs from **vcstool** `.repos` files and **Ansible Galaxy** requirements files (`requirements.yml`, `requirements.yaml`, `ansible-galaxy-requirements.yaml`).
 
 ## Demo
 
@@ -8,10 +8,10 @@ A Chrome extension that adds a shortcut button to open the URLs of repositories 
 
 ## Features
 
-- 🚀 Automatically detects `.repos` files on GitHub
-- 🎯 Adds convenient "Open" buttons next to each repository entry
-- 🔗 Supports both SSH and HTTPS repository URLs
-- 📦 Handles version/branch/commit navigation
+- 🚀 Detects `.repos` and Ansible Galaxy requirements files on GitHub
+- 🎯 Adds "Open" buttons next to each git repository entry (vcstool blocks; Galaxy list items with `type: git`, `src`, etc.)
+- 🔗 Supports SSH and HTTPS URLs (`git+https://`, URL fragments, inline `#` comments)
+- 📦 Opens the correct branch, tag, or commit on GitHub when a version is specified
 - ⚡ Real-time URL monitoring with GitHub SPA navigation
 
 ## Installation
