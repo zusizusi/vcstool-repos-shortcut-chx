@@ -1,6 +1,6 @@
 {
   "name": "vcstool & Ansible Galaxy repo shortcut",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "manifest_version": 3,
   "description": "On GitHub, adds shortcut buttons to open git repository URLs from vcstool .repos files and Ansible Galaxy requirements (requirements.yml, requirements.yaml, ansible-galaxy-requirements.yaml).",
   "content_scripts": [
